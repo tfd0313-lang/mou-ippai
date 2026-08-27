@@ -43,6 +43,18 @@ body{
     radial-gradient(46% 20% at 84% 3%, rgba(232,161,60,.11), transparent 70%),
     var(--ink);
 }
+/* 縦フレックスの子は既定で縮む。画面が低いと操作方式の帯が2pxまで潰れ、
+   overflow:hidden で中のボタンごと刈り取られて押せなくなっていた。
+   縮ませずに #home 側をスクロールさせる。 */
+#home > *{flex-shrink:0}
+/* 画面の低い端末では詰めて、スクロールせずに「はじめる」まで届かせる */
+@media (max-height:800px){
+  #home{gap:8px}
+  #heroMug{width:min(24%,96px)}
+  #home h1{font-size:clamp(26px,7.5vw,34px)}
+  #levels{gap:4px}
+  #home .sub{font-size:12px}
+}
 #heroMug{width:min(34%,140px);flex:0 0 auto;display:block;filter:drop-shadow(0 14px 24px rgba(0,0,0,.55))}
 #heroMug .bub{animation:rise 2.6s linear infinite;opacity:0}
 #heroMug .bub.b2{animation-delay:.9s}
