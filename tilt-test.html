@@ -1,0 +1,104 @@
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>傾きセンサー診断 - もう一杯！</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;padding:16px;background:#14100c;color:#EDE3D2;
+     font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}
+h1{font-size:19px;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:#A79680;font-size:13px}
+button{appearance:none;border:0;width:100%;padding:16px;border-radius:12px;
+  background:linear-gradient(180deg,#F1B054,#C4841F);color:#221503;
+  font-size:17px;font-weight:700;margin:8px 0 16px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+td{padding:7px 8px;border-bottom:1px solid #2E251B;font-size:14px;vertical-align:top}
+td:first-child{color:#A79680;width:44%}
+td:last-child{font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+.ok{color:#6FCF8B}.ng{color:#E8705E}.warn{color:#E8A13C}
+#gauge{height:14px;border-radius:99px;background:#2E251B;overflow:hidden;margin:4px 0 16px}
+#gauge i{display:block;height:100%;width:0;background:#E8A13C}
+#big{font-size:38px;font-weight:800;text-align:center;padding:10px 0;letter-spacing:.04em}
+.note{background:#1E1810;border:1px solid #33291D;border-radius:10px;padding:12px;font-size:13px;color:#C3B4A0}
+code{background:#2A2118;padding:1px 5px;border-radius:4px}
+</style></head><body>
+<h1>傾きセンサー診断</h1>
+<p class="sub">この画面をスマホで開いて、下のボタンを押してから端末を左右に傾けてください。</p>
+
+<button id="ask">センサーを使う許可を求める</button>
+
+<div id="big">—</div>
+<div id="gauge"><i></i></div>
+
+<table>
+<tr><td>HTTPS(secure context)</td><td id="r-sec">—</td></tr>
+<tr><td>iframeの中か</td><td id="r-frame">—</td></tr>
+<tr><td>DeviceOrientationEvent</td><td id="r-doe">—</td></tr>
+<tr><td>requestPermission()</td><td id="r-rp">—</td></tr>
+<tr><td>許可の結果</td><td id="r-perm">未実行</td></tr>
+<tr><td>イベント受信数</td><td id="r-count">0</td></tr>
+<tr><td>gamma(左右)</td><td id="r-gamma">—</td></tr>
+<tr><td>beta(前後)</td><td id="r-beta">—</td></tr>
+<tr><td>alpha(方位)</td><td id="r-alpha">—</td></tr>
+<tr><td>gammaの最小/最大</td><td id="r-range">—</td></tr>
+<tr><td>ブラウザ</td><td id="r-ua">—</td></tr>
+</table>
+
+<div class="note" id="verdict">ボタンを押すと判定が出ます。</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const mark=(el,ok,txt)=>{el.textContent=txt;el.className=ok===true?'ok':ok===false?'ng':'warn';};
+
+mark($('r-sec'), !!window.isSecureContext, window.isSecureContext?'はい':'いいえ');
+const framed = window.self!==window.top;
+mark($('r-frame'), !framed, framed?'はい(センサーが遮られます)':'いいえ');
+const hasDOE = typeof DeviceOrientationEvent!=='undefined';
+mark($('r-doe'), hasDOE, hasDOE?'あり':'なし');
+const hasRP = hasDOE && typeof DeviceOrientationEvent.requestPermission==='function';
+mark($('r-rp'), null, hasRP?'あり(iOS方式)':'なし(Android方式は許可不要)');
+$('r-ua').textContent=navigator.userAgent;
+
+let n=0, lo=null, hi=null, got=false;
+function onOri(e){
+  n++; got=true;
+  $('r-count').textContent=n;
+  const g=e.gamma, b=e.beta, a=e.alpha;
+  $('r-gamma').textContent = g==null?'null':g.toFixed(1);
+  $('r-beta').textContent  = b==null?'null':b.toFixed(1);
+  $('r-alpha').textContent = a==null?'null':a.toFixed(1);
+  if(g!=null){
+    lo = lo===null?g:Math.min(lo,g);
+    hi = hi===null?g:Math.max(hi,g);
+    $('r-range').textContent = lo.toFixed(1)+' 〜 '+hi.toFixed(1)+'  (幅 '+(hi-lo).toFixed(1)+'°)';
+    $('big').textContent = g.toFixed(0)+'°';
+    $('gauge').firstElementChild.style.width = Math.min(100, Math.abs(g)/65*100)+'%';
+    if(hi-lo>=18) verdict('ok','センサーは正常に動いています。ゲーム側で注げない場合はゲームの不具合です。この画面のスクリーンショットを送ってください。');
+    else verdict('warn','値は届いていますが、まだ十分に傾いていません。端末を左右に45度くらい倒してみてください。');
+  } else {
+    verdict('ng','イベントは来ていますが値がすべてnullです。ブラウザがセンサーを遮っています。');
+  }
+}
+function verdict(k,msg){ $('verdict').innerHTML=msg; $('verdict').style.borderColor = k==='ok'?'#3E6B47':k==='ng'?'#6B3A33':'#33291D'; }
+
+$('ask').addEventListener('click', async ()=>{
+  try{
+    if(hasRP){
+      const r = await DeviceOrientationEvent.requestPermission();
+      mark($('r-perm'), r==='granted', r);
+      if(r!=='granted'){
+        verdict('ng','許可されませんでした。<br><br>一度「許可しない」を選ぶとSafariが記憶します。<br><b>設定 → Apps → Safari → 詳細 → Webサイトデータ</b> でこのサイトのデータを削除するか、<b>設定 → Safari → 履歴とWebサイトデータを消去</b>してから、もう一度開いて許可してください。');
+        return;
+      }
+    } else {
+      mark($('r-perm'), null, '不要(この端末では許可を求めません)');
+    }
+    window.addEventListener('deviceorientation', onOri);
+    verdict('warn','受信待ちです。端末を左右に傾けてください。3秒たっても受信数が0のままなら、この端末はセンサーを出していません。');
+    setTimeout(()=>{ if(!got) verdict('ng','許可は下りましたが、イベントが1件も届きません。端末またはブラウザがセンサーを出していません。'); },3000);
+  }catch(err){
+    mark($('r-perm'), false, 'エラー: '+err.message);
+    verdict('ng','許可の要求でエラーが出ました: '+err.message);
+  }
+});
+</script></body></html>
