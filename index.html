@@ -1153,7 +1153,8 @@ const Input = {
       const t=this.tilt;
       if(t.base===null) return 0;
       const d=t.ang-t.base;
-      if(t.dir===0 && Math.abs(d)>CFG.TILT.DIR) t.dir=Math.sign(d);
+      if(t.dir===0){ if(Math.abs(d)>CFG.TILT.DIR) t.dir=Math.sign(d); }
+      else if(d*t.dir < -CFG.TILT.DIR && !t.pouring) t.dir=Math.sign(d);
       if(t.dir===0) return 0;
       a=d*t.dir;
     }
@@ -1179,8 +1180,11 @@ const Input = {
     if(t.listening) return;
     window.addEventListener('deviceorientation',e=>{
       if(e.gamma==null) return;
-      t.lastEvt=performance.now(); t.everGot=true;
-      t.ang += (e.gamma-t.ang)*0.28;
+      t.lastEvt=performance.now();
+      // 初回は実測値をそのまま入れる。0から寄せると基準を取る間に
+      // 収束途中の値が混ざり、注ぐ向きが逆に固定されることがあった
+      if(!t.everGot){ t.ang=e.gamma; t.everGot=true; }
+      else t.ang += (e.gamma-t.ang)*0.28;
     });
     t.listening=true;
   },
@@ -1520,8 +1524,8 @@ function update(dt){
     case 'armDelay':{
       if(G.t>=0.15){
         if(Input.mode==='tilt'&&!Input.useSwipe){
-          const b=Input.tilt.baseBuf;
-          Input.tilt.base=b.length?b.reduce((a,v)=>a+v,0)/b.length:0;
+          const b=Input.tilt.baseBuf.slice(-20).sort((x,y)=>x-y);
+          Input.tilt.base = b.length ? b[b.length>>1] : Input.tilt.ang;
         }
         Input.enabled=true;
         el.pourBtn.disabled=false;
@@ -1798,6 +1802,23 @@ function drawBottle(gcx, rimY, nf, now){
   ctx.restore();
 }
 /* シーンモード描画: Gemini画像のグラスへ直接注ぐ */
+/* センサーが生きているか、いま何度かを画面に出す。
+   ?tilt=1 を付けると内部の値もそのまま見える(不具合の切り分け用) */
+const TILTDBG=/[?&]tilt=1/.test(location.search);
+function tiltReadout(a){
+  if(Input.useSwipe) return;
+  const t=Input.tilt;
+  if(TILTDBG){
+    const d=t.base===null?0:(t.ang-t.base);
+    el.tiltMsg.textContent=
+      `got${t.everGot?1:0} sw${Input.useSwipe?1:0} base${t.base===null?'-':t.base.toFixed(0)} `+
+      `ang${t.ang.toFixed(0)} d${d.toFixed(0)} dir${t.dir} a${(d*(t.dir||1)).toFixed(0)} p${t.pouring?1:0}`;
+    return;
+  }
+  el.tiltMsg.textContent = t.everGot
+    ? `傾き ${a.toFixed(0)}° / ${CFG.TILT.START}°で注ぎ始め`
+    : 'センサー待ち…';
+}
 function renderScene(now){
   const s=G.sim, sc=curScene, img=sceneImgs[G.sceneCh]&&sceneImgs[G.sceneCh][G.sceneFace];
   if(!img||!img.complete||!img.naturalWidth){ return; }
@@ -1929,12 +1950,7 @@ function renderScene(now){
     const a=Input.useSwipe?Math.abs(Input.swipe.ang):
       (Input.tilt.base===null?0:Math.abs(Input.tilt.ang-Input.tilt.base));
     el.tiltFill.style.width=(clamp((a-CFG.TILT.START)/(CFG.TILT.MAX-CFG.TILT.START),0,1)*100)+'%';
-    // センサーが生きているか一目で分かるよう、実際の傾き角を出す
-    if(!Input.useSwipe){
-      el.tiltMsg.textContent = Input.tilt.everGot
-        ? `傾き ${a.toFixed(0)}° / ${CFG.TILT.START}°で注ぎ始め`
-        : 'センサー待ち…';
-    }
+    tiltReadout(a);
   }
   if(DEBUG){
     el.debug.textContent=`LV ${G.lvl.lv} ${G.lvl.ch} [scene] ph ${G.phase}\nF ${(F*100).toFixed(2)}% intake ${(G.curIntake??1).toFixed(2)}`;
@@ -2107,6 +2123,7 @@ function render(now){
     const a=Input.useSwipe?Math.abs(Input.swipe.ang):
       (Input.tilt.base===null?0:Math.abs(Input.tilt.ang-Input.tilt.base));
     el.tiltFill.style.width=(clamp((a-CFG.TILT.START)/(CFG.TILT.MAX-CFG.TILT.START),0,1)*100)+'%';
+    tiltReadout(a);
   }
 
   if(DEBUG){
@@ -2207,7 +2224,17 @@ function syncVoiceBtn(){
   el.voiceBtn.setAttribute('aria-pressed',String(!!Save.data.voice));
 }
 el.voiceBtn.addEventListener('click',()=>{
-  Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
+  Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel();
+
+/* 許可の要らない端末(Android等)では読み込み時点でセンサーを購読しておく。
+   ボタンを押してから初回イベントを待つ作りだと、WebViewのように配信が遅い
+   環境で「センサーなし」と誤判定され、以後ドラッグ操作に固定されていた。
+   先に繋いでおけば、傾けを選ぶ時点で既に値が来ている。 */
+if(typeof DeviceOrientationEvent!=='undefined' &&
+   typeof DeviceOrientationEvent.requestPermission!=='function'){
+  try{ Input.startTiltListener(); }catch(e){}
+  setTimeout(setTiltLabel,600);
+} Snd.ui();
   if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
 });
 syncVoiceBtn(); setTiltLabel();
