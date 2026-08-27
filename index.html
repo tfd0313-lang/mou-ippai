@@ -2190,19 +2190,21 @@ el.game.addEventListener('pointerdown',()=>{
   if(G.phase==='reaction'&&G.reactionSkippable) showResult();
 });
 
-function setMode(m){
+function setMode(m,silent){
   Input.mode=m;
   el.modeBtnBtn.classList.toggle('on',m==='button');
   el.modeTiltBtn.classList.toggle('on',m==='tilt');
   setTiltLabel();
-  Snd.ui();
+  if(!silent) Snd.ui();
 }
 /* 傾けボタンの表示を実際の入力手段に合わせる(嘘の選択肢を見せない) */
 function setTiltLabel(){
   el.modeTiltBtn.textContent = Input.useSwipe ? 'ドラッグで注ぐ' : '傾けて注ぐ';
   if(Input.mode==='tilt'&&Input.useSwipe) el.modeHint.textContent='この端末ではセンサーが使えないため、画面を左右にドラッグして注ぎます';
-  else if(Input.mode==='tilt') el.modeHint.textContent='スマホを左右に傾けて注ぎます';
-  else el.modeHint.textContent='押し続けるほど勢いが増し、泡が多くなります';
+  else if(Input.mode==='tilt') el.modeHint.textContent='✓ 傾けて注ぐモード。スマホを左右に傾けてください';
+  else el.modeHint.textContent = Input.tilt.everGot
+    ? '✓ ボタンモード。傾けて注ぎたいときは右の「傾けて注ぐ」を押してください'
+    : '押し続けるほど勢いが増し、泡が多くなります';
 }
 el.modeBtnBtn.addEventListener('click',()=>setMode('button'));
 el.modeTiltBtn.addEventListener('click',async()=>{
@@ -2224,7 +2226,10 @@ function syncVoiceBtn(){
   el.voiceBtn.setAttribute('aria-pressed',String(!!Save.data.voice));
 }
 el.voiceBtn.addEventListener('click',()=>{
-  Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel();
+  Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
+  if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
+});
+syncVoiceBtn(); setTiltLabel();
 
 /* 許可の要らない端末(Android等)では読み込み時点でセンサーを購読しておく。
    ボタンを押してから初回イベントを待つ作りだと、WebViewのように配信が遅い
@@ -2232,12 +2237,16 @@ el.voiceBtn.addEventListener('click',()=>{
    先に繋いでおけば、傾けを選ぶ時点で既に値が来ている。 */
 if(typeof DeviceOrientationEvent!=='undefined' &&
    typeof DeviceOrientationEvent.requestPermission!=='function'){
-  try{ Input.startTiltListener(); }catch(e){}
-  setTimeout(setTiltLabel,600);
-} Snd.ui();
-  if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
-});
-syncVoiceBtn(); setTiltLabel();
+  Input.startTiltListener();
+  // 傾けて注ぐのがこのゲームの主役。センサーが実際に動いている端末では
+  // 最初から傾けを選んでおく(以前はボタンが既定で、選び直さないと使えなかった)
+  let tries=0;
+  const pick=setInterval(()=>{
+    if(Input.tilt.everGot){ if(Input.mode!=='tilt') setMode('tilt',true); clearInterval(pick); }
+    else if(++tries>=15) clearInterval(pick);   // 3秒待って来なければボタンのまま
+    setTiltLabel();
+  },200);
+}
 
 el.startBtn.addEventListener('click',()=>{
   armAudio(); Snd.ui();
