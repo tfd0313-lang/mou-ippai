@@ -348,6 +348,10 @@ body{
       <button id="modeBtnBtn" class="on">ボタンで注ぐ</button>
       <button id="modeTiltBtn">傾け／スワイプ</button>
     </div>
+    <div class="seg" id="axisSeg" role="group" aria-label="傾ける向き" hidden>
+      <button id="axisFbBtn" class="on">前後に傾ける</button>
+      <button id="axisLrBtn">左右に傾ける</button>
+    </div>
     <div id="modeHint"></div>
     <button id="voiceBtn" class="on" aria-pressed="true">声 ON</button>
     <div id="levels" role="group" aria-label="レベル選択"></div>
@@ -834,7 +838,8 @@ const TABLE_COLOR = {dining:'#4A3524', living:'#3A2C20', izakaya:'#271B10',
 const Save = {
   key:'mouippai_v1',
   data:{schemaVersion:2, highestCleared:0, bestByLevel:{}, best:{button:0,tilt:0},
-        totalSuccess:0, totalPerfect:0, voice:true, foamTipSeen:false, swipeTipSeen:false},
+        totalSuccess:0, totalPerfect:0, voice:true, foamTipSeen:false, swipeTipSeen:false,
+        tiltAxis:'fb'},
   load(){ try{
     const raw=localStorage.getItem(this.key); if(!raw) return;
     const d=JSON.parse(raw); if(!d) return;
@@ -1135,7 +1140,8 @@ function pickLine(chId,verdict){
 /* ---------- 入力 §5 (センサー不可時はスワイプで傾け) ---------- */
 const Input = {
   mode:'button', enabled:false, btnHeld:false, holdT:0,
-  tilt:{ang:0,base:null,baseBuf:[],dir:0,pouring:false,lastEvt:0,listening:false,everGot:false},
+  axis:'fb',   // 'fb'=前後に傾ける / 'lr'=左右に傾ける
+  tilt:{ang:0,g:0,b:0,base:null,baseBuf:[],dir:0,pouring:false,lastEvt:0,listening:false,everGot:false},
   swipe:{active:false,startX:0,ang:0},
   useSwipe:false,
   flow(Qmax){
@@ -1179,14 +1185,23 @@ const Input = {
     const t=this.tilt;
     if(t.listening) return;
     window.addEventListener('deviceorientation',e=>{
-      if(e.gamma==null) return;
+      if(e.gamma==null && e.beta==null) return;
       t.lastEvt=performance.now();
+      const g=e.gamma==null?t.g:e.gamma, b=e.beta==null?t.b:e.beta;
       // 初回は実測値をそのまま入れる。0から寄せると基準を取る間に
       // 収束途中の値が混ざり、注ぐ向きが逆に固定されることがあった
-      if(!t.everGot){ t.ang=e.gamma; t.everGot=true; }
-      else t.ang += (e.gamma-t.ang)*0.28;
+      if(!t.everGot){ t.g=g; t.b=b; t.everGot=true; }
+      else { t.g += (g-t.g)*0.28; t.b += (b-t.b)*0.28; }
+      t.ang = (Input.axis==='fb') ? t.b : t.g;
     });
     t.listening=true;
+  },
+  setAxis(ax){
+    if(this.axis===ax) return;
+    this.axis=ax;
+    const t=this.tilt;
+    t.ang = (ax==='fb') ? t.b : t.g;
+    t.base=null; t.baseBuf=[]; t.dir=0; t.pouring=false;   // 基準を取り直す
   },
   async requestTilt(){
     try{
@@ -1208,6 +1223,7 @@ const el={home:$('home'),game:$('game'),result:$('result'),bubble:$('bubble'),te
   verdict:$('verdict'),resMeta:$('resMeta'),resScore:$('resScore'),clearTag:$('clearTag'),
   newBest:$('newBest'),nextBtn:$('nextBtn'),retryBtn:$('retryBtn'),toHome:$('toHome'),startBtn:$('startBtn'),
   modeBtnBtn:$('modeBtnBtn'),modeTiltBtn:$('modeTiltBtn'),voiceBtn:$('voiceBtn'),homeBest:$('homeBest'),
+  axisSeg:$('axisSeg'),axisFbBtn:$('axisFbBtn'),axisLrBtn:$('axisLrBtn'),
   levels:$('levels'),modeHint:$('modeHint'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),
   notice:$('notice'),debug:$('debug'),charaArea:$('charaArea'),
   foamChip:$('foamChip'),foamBar:$('foamBar'),foamWord:$('foamWord'),
@@ -2200,13 +2216,24 @@ function setMode(m,silent){
 /* 傾けボタンの表示を実際の入力手段に合わせる(嘘の選択肢を見せない) */
 function setTiltLabel(){
   el.modeTiltBtn.textContent = Input.useSwipe ? 'ドラッグで注ぐ' : '傾けて注ぐ';
+  const fb = Input.axis==='fb';
+  el.axisSeg.hidden = !(Input.mode==='tilt' && !Input.useSwipe);
+  el.axisFbBtn.classList.toggle('on', fb);
+  el.axisLrBtn.classList.toggle('on', !fb);
   if(Input.mode==='tilt'&&Input.useSwipe) el.modeHint.textContent='この端末ではセンサーが使えないため、画面を左右にドラッグして注ぎます';
-  else if(Input.mode==='tilt') el.modeHint.textContent='✓ 傾けて注ぐモード。スマホを左右に傾けてください';
+  else if(Input.mode==='tilt') el.modeHint.textContent = fb
+    ? '✓ 傾けて注ぐモード。瓶を傾けるように、上端を前へ倒してください'
+    : '✓ 傾けて注ぐモード。スマホを左右に傾けてください';
   else el.modeHint.textContent = Input.tilt.everGot
     ? '✓ ボタンモード。傾けて注ぎたいときは右の「傾けて注ぐ」を押してください'
     : '押し続けるほど勢いが増し、泡が多くなります';
 }
 el.modeBtnBtn.addEventListener('click',()=>setMode('button'));
+function setAxis(ax){
+  Input.setAxis(ax); Save.data.tiltAxis=ax; Save.save(); setTiltLabel(); Snd.ui();
+}
+el.axisFbBtn.addEventListener('click',()=>setAxis('fb'));
+el.axisLrBtn.addEventListener('click',()=>setAxis('lr'));
 el.modeTiltBtn.addEventListener('click',async()=>{
   setMode('tilt');
   const ok=await Input.requestTilt();
@@ -2229,6 +2256,7 @@ el.voiceBtn.addEventListener('click',()=>{
   Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
   if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
 });
+Input.axis = Save.data.tiltAxis==='lr' ? 'lr' : 'fb';
 syncVoiceBtn(); setTiltLabel();
 
 /* 許可の要らない端末(Android等)では読み込み時点でセンサーを購読しておく。
@@ -2259,7 +2287,7 @@ el.startBtn.addEventListener('click',()=>{
   el.tiltGuide.hidden=Input.mode!=='tilt';
   el.tiltMsg.textContent=Input.useSwipe
     ? '画面を左右にドラッグ → 遠いほど強く注ぐ'
-    : 'スマホを左右に傾けて注ぐ';
+    : (Input.axis==='fb' ? 'スマホの上端を前へ倒して注ぐ' : 'スマホを左右に傾けて注ぐ');
   startLevel(G.selLevel,false);
 });
 el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,18); startLevel(G.lvl.lv+1,false); });
