@@ -1379,6 +1379,7 @@ function startLevel(n, retry){
 function show(name){
   el.home.classList.toggle('on',name==='home');
   el.game.classList.toggle('on',name==='game');
+  if(name==='home') requestAnimationFrame(()=>{ el.home.scrollTop=0; });
 }
 function updateHud(){
   const c=CHARS[G.lvl.ch];
@@ -2256,6 +2257,11 @@ el.voiceBtn.addEventListener('click',()=>{
   Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
   if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
 });
+// ブラウザによる位置の復元を止める(再訪時にレベル一覧から始まってしまう)
+try{ if('scrollRestoration' in history) history.scrollRestoration='manual'; }catch(e){}
+addEventListener('load',()=>{ el.home.scrollTop=0; scrollTo(0,0); });
+el.home.scrollTop=0;
+
 Input.axis = Save.data.tiltAxis==='lr' ? 'lr' : 'fb';
 syncVoiceBtn(); setTiltLabel();
 
