@@ -72,6 +72,11 @@ body{
 .seg button{appearance:none;border:0;background:transparent;color:var(--mut);
   font:inherit;font-size:13px;font-weight:500;padding:10px 16px;cursor:pointer}
 .seg button.on{background:var(--amber);color:#221503;font-weight:700}
+/* 押した瞬間に反応を返す。触れてから色が変わるまでの間があると遅く感じる */
+button{touch-action:manipulation}
+.seg button:active{background:rgba(232,161,60,.34)}
+#voiceBtn:active{transform:scale(.94)}
+#levels .lvbtns button:active{transform:scale(.88);background:var(--amber);color:#221503}
 #modeHint{color:var(--mut);font-size:11px;line-height:1.6;max-width:300px;opacity:.85}
 #voiceBtn{appearance:none;cursor:pointer;font:inherit;font-size:12px;letter-spacing:.08em;
   color:var(--mut);background:var(--wood);border:1px solid var(--wood-hi);border-radius:999px;padding:8px 16px}
@@ -645,7 +650,9 @@ const CFG = {
   OVF_GRACE:0.002, SPILL_OUT:0.02,
   PERFECT_F:0.985, PERFECT_W:0.003, GREAT_F:0.95, MIN_F:0.86,
   TICK:1/120,
-  TILT:{DIR:12,START:18,MAX:65,STOP:14},
+  // START〜MAXが広すぎて、ちょうどの泡に届くのに基準から約42度必要だった。
+  // MAXを詰めて、手首の可動域(20〜30度)でちょうどに入るようにする
+  TILT:{DIR:9,START:14,MAX:42,STOP:10},
   RESPONSE_BUDGET:0.35,        // §10.5 predictedStopFill
   FILL_FACTOR:1.10,            // Q→実効充填速度の係数(泡膨張込み概算)
   FLOW_MIN:0.60,               // ボタンを押した瞬間の流量(最大比)
@@ -1397,12 +1404,18 @@ function updateHud(){
   const c=CHARS[G.lvl.ch];
   el.hud.innerHTML=`LEVEL <b>${G.lvl.lv}</b>　${c.name} <span style="color:#E8A13C">${'★'.repeat(c.stars)}</span>`;
 }
+let lvBtns=null;      // レベル番号ボタンの実体。作り直さず使い回す
 function updateHome(){
   const d=Save.data;
   el.homeBest.innerHTML=
     `到達 LEVEL <b>${Math.min(d.highestCleared+1,18)}</b>　`+
     `最高スコア ボタン <b>${d.best.button}</b>／傾け <b>${d.best.tilt}</b><br>`+
     `PERFECT累計 <b>${d.totalPerfect}</b>`;
+  // 選び直しただけなら選択の付け替えで済ませる。
+  // 以前は毎タップで18個を作り直しており、押した要素ごと消えるため
+  // 押した手応えが出ず、反応が遅く感じていた
+  if(lvBtns){ refreshLevels(); return; }
+  lvBtns={};
   el.levels.innerHTML='';
   // 検証用ビルドは全レベル解放(SPEC 25)。人物ごとに行を分けて誰の面か分かるようにする
   const groups=[];
@@ -1425,12 +1438,23 @@ function updateHome(){
       b.textContent=i;
       if(i<=Save.data.highestCleared) b.classList.add('clear');
       if(i===G.selLevel) b.classList.add('sel');
-      b.addEventListener('click',()=>{ G.selLevel=i; Snd.ui(); updateHome(); });
+      b.addEventListener('click',()=>{ G.selLevel=i; Snd.ui(); refreshLevels(); });
+      lvBtns[i]=b;
       btns.appendChild(b);
     });
     row.appendChild(btns);
     el.levels.appendChild(row);
   });
+  refreshLevels();
+}
+/* 選択状態とクリア印だけを付け替える */
+function refreshLevels(){
+  if(!lvBtns) return;
+  for(const k in lvBtns){
+    const i=+k, b=lvBtns[k];
+    b.classList.toggle('sel', i===G.selLevel);
+    b.classList.toggle('clear', i<=Save.data.highestCleared);
+  }
   el.startBtn.textContent=`LEVEL ${G.selLevel} へ`;
 }
 
