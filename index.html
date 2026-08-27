@@ -1680,8 +1680,9 @@ function innerHalfW(g,gw,t){
    位置は「注ぎ口ありき」で決めるので、常にグラスへ注いでいる画になる */
 function bottleGeom(gcx, rimY, nf){
   const sc=Math.max(0.6, Math.min(1.3, CW/390));
-  // 手に持った瓶として大きく見せる。胴は画面右上へ抜け、人物の顔を隠さない
-  const BW=56*sc, BH=190*sc, NECK=56*sc;              // 長めにして胴を画面右外へ逃がす
+  // 手に持った瓶。胴を長くして握り手ごと画面外へ逃がす。
+  // (平面的な指を描くと写真の人物の横で一番安っぽく見えるため、描かない)
+  const BW=54*sc, BH=250*sc, NECK=42*sc;
   const R=BH/2+NECK;                                  // 中心→注ぎ口の距離
   const ang=-(1.02 + nf*1.16);                        // 未注ぎ:立て気味 / 全開:注ぎ角
   const dir={x:Math.sin(ang), y:-Math.cos(ang)};      // 注ぎ口の向き
@@ -1690,56 +1691,107 @@ function bottleGeom(gcx, rimY, nf){
           px:spout.x - R*dir.x, py:spout.y - R*dir.y};
 }
 function bottleSpout(gcx, rimY, nf){ return bottleGeom(gcx,rimY,nf).spout; }
+/* 瓶のシルエットを1本のパスで引く。角丸四角の組み合わせだと
+   肩の折れ目が出て、写真の人物の横で作り物に見えるため。 */
+function bottlePath(BW,BH,NECK,sc){
+  const hw=BW/2, nhw=BW*0.19, top=-BH/2, bot=BH/2;
+  const shoulder=top-20*sc, lip=top-NECK;
+  ctx.beginPath();
+  ctx.moveTo(-hw+9*sc, bot);
+  ctx.quadraticCurveTo(-hw, bot, -hw, bot-9*sc);      // 底の角(ヒール)
+  ctx.lineTo(-hw, top+18*sc);
+  // なで肩: 胴から首へ滑らかに絞る
+  ctx.bezierCurveTo(-hw, shoulder+6*sc, -nhw-2*sc, shoulder+2*sc, -nhw, shoulder-8*sc);
+  ctx.lineTo(-nhw, lip+7*sc);
+  ctx.quadraticCurveTo(-nhw-2.5*sc, lip+3*sc, -nhw-2.5*sc, lip);   // 口の巻き
+  ctx.lineTo(nhw+2.5*sc, lip);
+  ctx.quadraticCurveTo(nhw+2.5*sc, lip+3*sc, nhw, lip+7*sc);
+  ctx.lineTo(nhw, shoulder-8*sc);
+  ctx.bezierCurveTo(nhw+2*sc, shoulder+2*sc, hw, shoulder+6*sc, hw, top+18*sc);
+  ctx.lineTo(hw, bot-9*sc);
+  ctx.quadraticCurveTo(hw, bot, hw-9*sc, bot);
+  ctx.closePath();
+}
 function drawBottle(gcx, rimY, nf, now){
   const g=bottleGeom(gcx,rimY,nf);
   const {sc,BW,BH,NECK}=g;
+  const hw=BW/2, top=-BH/2;
   ctx.save();
   ctx.translate(g.px,g.py); ctx.rotate(g.ang);
 
-  // 瓶を握る手(瓶の後ろ側の指)
-  ctx.fillStyle='#D89A66';
-  for(let i=0;i<3;i++){
-    ctx.beginPath(); ctx.roundRect(-BW*0.58,(-14+i*13)*sc,BW*1.16,10*sc,5*sc); ctx.fill();
-  }
-  // 影
-  ctx.fillStyle='rgba(0,0,0,.30)';
-  ctx.beginPath(); ctx.roundRect(-BW/2+3*sc,-BH/2+4*sc,BW,BH,8*sc); ctx.fill();
-  // 胴と首(茶色ガラス)
-  const body=ctx.createLinearGradient(-BW/2,0,BW/2,0);
-  body.addColorStop(0,'#331906'); body.addColorStop(.26,'#7E4210');
-  body.addColorStop(.5,'#B8701F'); body.addColorStop(.76,'#67350D'); body.addColorStop(1,'#2A1405');
-  ctx.fillStyle=body;
-  ctx.beginPath(); ctx.roundRect(-BW/2,-BH/2,BW,BH,8*sc); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-BW/2,-BH/2+2*sc);
-  ctx.quadraticCurveTo(-BW/2,-BH/2-15*sc,-BW*0.20,-BH/2-22*sc);
-  ctx.lineTo(-BW*0.20,-BH/2-NECK);
-  ctx.lineTo(BW*0.20,-BH/2-NECK);
-  ctx.lineTo(BW*0.20,-BH/2-22*sc);
-  ctx.quadraticCurveTo(BW/2,-BH/2-15*sc,BW/2,-BH/2+2*sc);
-  ctx.closePath(); ctx.fill();
-  // 口のリング
-  ctx.fillStyle='#5E300B';
-  ctx.beginPath(); ctx.roundRect(-BW*0.25,-BH/2-NECK-4*sc,BW*0.50,6*sc,2.5*sc); ctx.fill();
-  // ラベル
-  ctx.fillStyle='#EBE2CA';
-  ctx.beginPath(); ctx.roundRect(-BW/2+2*sc,-BH*0.12,BW-4*sc,BH*0.40,3*sc); ctx.fill();
-  ctx.fillStyle='#B0322A';
-  ctx.beginPath(); ctx.roundRect(-BW/2+2*sc,-BH*0.12,BW-4*sc,BH*0.10,3*sc); ctx.fill();
+  // 落ち影: 舞台に接地感を出す
   ctx.save();
-  ctx.translate(0,-BH*0.12+BH*0.24);
-  ctx.rotate(Math.PI/2);                              // 瓶の長辺に沿って読める向き
-  ctx.fillStyle='#3A2410';
-  ctx.font=`700 ${Math.round(19*sc)}px "Zen Kaku Gothic New",sans-serif`;
+  ctx.globalAlpha=.34; ctx.filter='blur(7px)';
+  ctx.fillStyle='#000';
+  bottlePath(BW*1.04,BH,NECK,sc); ctx.translate(5*sc,7*sc); ctx.fill();
+  ctx.restore();
+
+  // 茶色ガラス本体。両端を落として中央に鏡面を置くと丸みが出る
+  const body=ctx.createLinearGradient(-hw,0,hw,0);
+  body.addColorStop(0,   '#0E0601');
+  body.addColorStop(.11, '#2B1507');
+  body.addColorStop(.30, '#532E0F');
+  body.addColorStop(.43, '#7E4A16');
+  body.addColorStop(.52, '#5C350F');
+  body.addColorStop(.74, '#311806');
+  body.addColorStop(1,   '#0B0501');
+  ctx.fillStyle=body; bottlePath(BW,BH,NECK,sc); ctx.fill();
+
+  // 上下の陰影(首側を明るく、底側を沈ませる)
+  ctx.save(); bottlePath(BW,BH,NECK,sc); ctx.clip();
+  const vert=ctx.createLinearGradient(0,top-NECK,0,BH/2);
+  vert.addColorStop(0,'rgba(255,214,150,.16)');
+  vert.addColorStop(.35,'rgba(0,0,0,0)');
+  vert.addColorStop(1,'rgba(0,0,0,.42)');
+  ctx.fillStyle=vert; ctx.fillRect(-hw,top-NECK,BW,BH+NECK);
+
+  // 鏡面ハイライト(太い主反射と細い副反射)
+  const spec=ctx.createLinearGradient(-hw,0,hw,0);
+  spec.addColorStop(.36,'rgba(255,236,196,0)');
+  spec.addColorStop(.43,'rgba(255,243,214,.42)');
+  spec.addColorStop(.49,'rgba(255,236,196,0)');
+  spec.addColorStop(.80,'rgba(255,226,180,0)');
+  spec.addColorStop(.86,'rgba(255,232,190,.20)');
+  spec.addColorStop(.92,'rgba(255,226,180,0)');
+  ctx.fillStyle=spec; ctx.fillRect(-hw,top-NECK,BW,BH+NECK);
+  ctx.restore();
+
+  // 口の巻き(リング)
+  const lip=top-NECK, nhw=BW*0.27;
+  ctx.fillStyle='rgba(0,0,0,.30)';
+  ctx.beginPath(); ctx.roundRect(-nhw-2.5*sc, lip, (nhw+2.5*sc)*2, 7*sc, 2*sc); ctx.fill();
+  ctx.fillStyle='rgba(255,235,200,.28)';
+  ctx.beginPath(); ctx.roundRect(-nhw*0.5, lip+1*sc, nhw*0.5, 5*sc, 2*sc); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.45)'; ctx.lineWidth=1.2*sc;
+  ctx.beginPath(); ctx.moveTo(-nhw-2.5*sc, lip+7*sc); ctx.lineTo(nhw+2.5*sc, lip+7*sc); ctx.stroke();
+
+  // ラベル: 瓶の丸みに合わせて端を暗くする
+  const LY=-BH*0.42, LH=BH*0.30, lw=BW-5*sc;
+  ctx.save();
+  ctx.beginPath(); ctx.roundRect(-lw/2, LY, lw, LH, 3*sc); ctx.clip();
+  ctx.fillStyle='#EFE7D2'; ctx.fillRect(-lw/2, LY, lw, LH);
+  const lg=ctx.createLinearGradient(-lw/2,0,lw/2,0);
+  lg.addColorStop(0,'rgba(60,32,10,.55)'); lg.addColorStop(.16,'rgba(60,32,10,.10)');
+  lg.addColorStop(.44,'rgba(255,255,255,.30)');
+  lg.addColorStop(.80,'rgba(60,32,10,.16)'); lg.addColorStop(1,'rgba(60,32,10,.60)');
+  ctx.fillStyle='#A82F26';
+  ctx.fillRect(-lw/2, LY, lw, LH*0.15);
+  ctx.fillRect(-lw/2, LY+LH*0.85, lw, LH*0.15);
+  ctx.save();
+  ctx.translate(0, LY+LH*0.52); ctx.rotate(Math.PI/2); // 瓶の長辺に沿って読める向き
+  ctx.fillStyle='#2E1B0A';
+  ctx.font=`700 ${Math.round(18*sc)}px "Zen Kaku Gothic New",sans-serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('ビール',0,0);
   ctx.restore();
-  // ガラスのハイライト
-  ctx.fillStyle='rgba(255,230,186,.32)';
-  ctx.beginPath(); ctx.roundRect(-BW*0.35,-BH/2+6*sc,4.5*sc,BH-14*sc,2.5*sc); ctx.fill();
-  // 手前の親指
-  ctx.fillStyle='#EFB98A';
-  ctx.beginPath(); ctx.roundRect(-BW*0.30,BH*0.02,13*sc,26*sc,6.5*sc); ctx.fill();
+  ctx.fillStyle=lg; ctx.fillRect(-lw/2, LY, lw, LH);   // 紙が瓶に巻かれている陰影
+  ctx.restore();
+  ctx.strokeStyle='rgba(0,0,0,.30)'; ctx.lineWidth=1*sc;
+  ctx.beginPath(); ctx.roundRect(-lw/2, LY, lw, LH, 3*sc); ctx.stroke();
+
+  // 縁の締め: ガラスらしい濃い輪郭
+  ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.lineWidth=1.4*sc;
+  bottlePath(BW,BH,NECK,sc); ctx.stroke();
   ctx.restore();
 }
 /* シーンモード描画: Gemini画像のグラスへ直接注ぐ */
