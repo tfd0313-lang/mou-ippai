@@ -176,6 +176,43 @@ body{
   background:radial-gradient(52% 26% at 62% 16%, rgba(255,196,104,.42), transparent 70%);
   animation:izaFlick 5.5s ease-in-out infinite}
 @keyframes izaFlick{0%,100%{opacity:.85}45%{opacity:1}70%{opacity:.78}}
+
+/* ===== レイアウト候補(いずれも背景は居酒屋の画像) ===== */
+/* --- L1: 上下分割。絵の上には何も乗せない --- */
+#home[data-hero="split"]{justify-content:flex-start;padding:0}
+#home[data-hero="split"] #izaBg{inset:0 0 auto 0;height:33%}
+#home[data-hero="split"] #izaGlow{inset:0 0 auto 0;height:33%}
+#home[data-hero="split"] #izaScrim{inset:0 0 auto 0;height:33%;
+  background:linear-gradient(180deg,rgba(10,6,3,.10) 0%,rgba(10,6,3,0) 55%,rgba(20,14,9,.96) 100%)}
+#splitPanel{position:absolute;left:0;right:0;top:31%;bottom:0;z-index:1;background:#150F0A;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:12px 22px calc(env(safe-area-inset-bottom,0px) + 12px);overflow-y:auto}
+#home[data-hero="split"] h1{font-size:clamp(26px,7.4vw,34px)}
+#home[data-hero="split"] #levels{gap:3px}
+#splitPanel > *{flex-shrink:0}
+
+/* --- L2: 絵は全面。UIは1枚のカードに載せる --- */
+#home[data-hero="card"]{justify-content:center;padding:16px 12px}
+#uiCard{position:relative;z-index:1;width:100%;max-width:352px;
+  background:rgba(16,10,6,.90);border:1px solid rgba(232,161,60,.42);border-radius:20px;
+  box-shadow:0 18px 40px rgba(0,0,0,.55);
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 14px 18px}
+#uiCard > *{flex-shrink:0}
+
+/* --- L3: レベル選択を1行にして絵を大きく見せる --- */
+#home[data-hero="compact"]{justify-content:flex-end;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px)}
+#home[data-hero="compact"] #izaScrim{
+  background:linear-gradient(180deg,rgba(10,6,3,.16) 0%,rgba(10,6,3,.04) 34%,rgba(14,9,5,.90) 78%,rgba(10,6,3,.97) 100%)}
+#lvPick{position:relative;z-index:1;display:none;width:100%;max-width:340px;
+  align-items:center;gap:10px;background:rgba(16,10,6,.86);
+  border:1px solid rgba(232,161,60,.45);border-radius:14px;padding:10px 12px}
+#lvPick button{appearance:none;border:0;background:rgba(232,161,60,.22);color:#F6E7CB;
+  width:38px;height:38px;border-radius:10px;font:inherit;font-size:17px;font-weight:700;flex:0 0 auto}
+#lvPick .now{flex:1;text-align:center;color:#F6EEDC;font-size:13px;line-height:1.35}
+#lvPick .now b{display:block;font-size:15px;color:#FFC059}
+#home[data-hero="compact"] #lvPick{display:flex}
+#home[data-hero="compact"] #levels{display:none}
+#home[data-hero="compact"] h1{font-size:clamp(30px,9vw,42px)}
 /* --- B: 巨大なグラスの中 --- */
 #home[data-hero="glass"]{
   background:
@@ -556,6 +593,8 @@ button{touch-action:manipulation}
     </div>
     <div id="modeHint"></div>
     <button id="voiceBtn" class="on" aria-pressed="true">声 ON</button>
+    <div id="lvPick"><button id="lvPrev">◀</button>
+      <span class="now" id="lvNow"></span><button id="lvNext">▶</button></div>
     <div id="levels" role="group" aria-label="レベル選択"></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
@@ -2500,7 +2539,27 @@ syncVoiceBtn(); setTiltLabel();
   RY.style.display = (h==='beer2'||h==='beer3') ? '' : 'none';
   GB.style.display = h==='glass' ? '' : 'none';
   PA.style.display = h==='pour' ? '' : 'none';
-  if(h==='glass'||h==='pour'||h==='beer2'||h==='izakaya') HM.style.display='none';
+  if(h==='glass'||h==='pour'||h==='beer2'||h==='izakaya'||h==='split'||h==='card'||h==='compact') HM.style.display='none';
+  // レイアウト候補は居酒屋の背景を共有する
+  if(h==='split'||h==='card'||h==='compact'){
+    IB.style.backgroundImage='url("'+ART.bgs.izakaya+'")';
+    IB.style.display=IS.style.display=IG.style.display='';
+    el.home.dataset.hero=h;
+  }
+  const move=(container)=>{
+    ['h1','.sub','.seg','#modeHint','#voiceBtn','#lvPick','#levels','#startBtn','#homeBest','#ver']
+      .forEach(sel=>{ const e=el.home.querySelector(sel); if(e) container.appendChild(e); });
+    el.home.appendChild(container);
+  };
+  if(h==='split'){ const d=document.createElement('div'); d.id='splitPanel'; move(d); }
+  if(h==='card'){ const d=document.createElement('div'); d.id='uiCard'; move(d); }
+  if(h==='compact'){
+    const upd=()=>{ const l=LEVELS[Math.min(Math.max(G.selLevel,1),18)-1], c=CHARS[l.ch];
+      document.getElementById('lvNow').innerHTML=`LEVEL ${l.lv}<b>${c.name}</b>`; refreshLevels(); };
+    document.getElementById('lvPrev').onclick=()=>{ G.selLevel=Math.max(1,G.selLevel-1); upd(); };
+    document.getElementById('lvNext').onclick=()=>{ G.selLevel=Math.min(18,G.selLevel+1); upd(); };
+    upd();
+  }
   if(h==='beer') HM.style.opacity='.9';
 })();
 
@@ -2559,15 +2618,18 @@ window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,b
 <style>
 #heroSw{position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;
   background:rgba(12,8,4,.94);border-top:1px solid #4A3A26;
-  padding:8px calc(env(safe-area-inset-left,0px) + 8px) calc(env(safe-area-inset-bottom,0px) + 8px)}
+  padding:8px calc(env(safe-area-inset-left,0px) + 6px) calc(env(safe-area-inset-bottom,0px) + 8px)}
 #heroSw button{flex:1;appearance:none;border:1px solid #5A4630;background:#241A11;color:#E9DCC6;
-  font:inherit;font-size:12px;font-weight:700;padding:11px 2px;margin:0 3px;border-radius:10px}
+  font:inherit;font-size:11px;font-weight:700;padding:11px 1px;margin:0 2px;border-radius:9px}
 #heroSw button.on{background:#E8A13C;color:#221503;border-color:#E8A13C}
 #stage{bottom:58px!important;height:calc(100dvh - 58px)!important}
 </style>
 <div id="heroSw">
-  <button data-h="">現行</button><button data-h="izakaya">居酒屋</button>
-  <button data-h="beer">泡A</button><button data-h="beer3">泡C</button>
+  <button data-h="">現行</button>
+  <button data-h="split">L1分割</button>
+  <button data-h="card">L2カード</button>
+  <button data-h="compact">L3すっきり</button>
+  <button data-h="izakaya">全面</button>
 </div>
 <script>
 (()=>{const cur=(location.search.match(/[?&]hero=(\w+)/)||[])[1]||'';
