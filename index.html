@@ -46,7 +46,35 @@ body{
 /* 縦フレックスの子は既定で縮む。画面が低いと操作方式の帯が2pxまで潰れ、
    overflow:hidden で中のボタンごと刈り取られて押せなくなっていた。
    縮ませずに #home 側をスクロールさせる。 */
-#home > *{flex-shrink:0}
+#home > *{flex-shrink:0;position:relative;z-index:1}
+/* 居酒屋の背景。文字が写真の上に直接乗ると読めないので、
+   下半分を暗く落としてから文字を置く */
+#homeBg,#homeGlow,#homeScrim{position:absolute;inset:0;z-index:0;pointer-events:none}
+#homeBg{background-size:cover;background-position:center 34%;
+  filter:brightness(1.42) saturate(1.18) contrast(1.04)}
+#homeGlow{background:radial-gradient(52% 26% at 62% 14%, rgba(255,196,104,.42), transparent 70%);
+  animation:homeFlick 5.5s ease-in-out infinite}
+@keyframes homeFlick{0%,100%{opacity:.85}45%{opacity:1}70%{opacity:.78}}
+#homeScrim{background:linear-gradient(180deg,
+  rgba(10,6,3,.14) 0%, rgba(10,6,3,.02) 22%, rgba(12,8,4,.58) 42%,
+  rgba(13,9,5,.88) 62%, rgba(10,6,3,.97) 100%)}
+#home{justify-content:flex-end}
+#home h1{text-shadow:0 2px 14px rgba(0,0,0,.85),0 0 30px rgba(232,161,60,.4)}
+#home .sub,#modeHint,#homeBest,#ver{text-shadow:0 1px 7px rgba(0,0,0,.85)}
+.seg{background:rgba(16,10,6,.86)}
+#voiceBtn{background:rgba(16,10,6,.86)}
+/* レベル選択: 18個並べると画面を埋めて絵が出せないので1行にまとめる */
+#levels[hidden]{display:none}
+#lvPick{display:flex;align-items:center;gap:10px;width:100%;max-width:340px;
+  background:rgba(16,10,6,.86);border:1px solid rgba(232,161,60,.45);border-radius:14px;padding:9px 11px}
+#lvPick button{appearance:none;border:0;background:rgba(232,161,60,.22);color:#F6E7CB;
+  width:40px;height:40px;border-radius:10px;font:inherit;font-size:17px;font-weight:700;
+  flex:0 0 auto;cursor:pointer;touch-action:manipulation}
+#lvPick button:active{background:var(--amber);color:#221503}
+#lvPick button:disabled{opacity:.32}
+#lvPick .now{flex:1;text-align:center;color:#D9C6A6;font-size:12px;line-height:1.35;letter-spacing:.04em}
+#lvPick .now b{display:block;font-size:15px;color:#FFC059;letter-spacing:.06em}
+#lvPick .now i{font-style:normal;color:#E8A13C;font-size:11px}
 /* 画面の低い端末では詰めて、スクロールせずに「はじめる」まで届かせる */
 @media (max-height:800px){
   #home{gap:8px}
@@ -334,31 +362,7 @@ button{touch-action:manipulation}
 <div id="stage">
   <!-- ホーム -->
   <div id="home" class="screen on">
-    <svg id="heroMug" viewBox="0 0 220 240" aria-hidden="true">
-      <g transform="translate(168,28) rotate(-128)">
-        <rect x="-13" y="-46" width="26" height="58" rx="8" fill="#7A4A1E"/>
-        <rect x="-6" y="-70" width="12" height="26" rx="5" fill="#5E3714"/>
-        <rect x="-13" y="-30" width="26" height="20" fill="#E8DCC8" opacity=".85"/>
-      </g>
-      <path d="M143 34 q3 30 -13 52 q-8 12 -9 22 l10 0 q4 -12 12 -22 q14 -20 12 -52 Z" fill="#F0A93C" opacity=".92"/>
-      <g>
-        <path d="M158 96 q34 4 34 34 q0 30 -34 34 l0 -12 q22 -4 22 -22 q0 -18 -22 -22 Z" fill="rgba(214,228,238,.5)"/>
-        <rect x="62" y="86" width="96" height="118" rx="10" fill="rgba(210,226,238,.13)"/>
-        <rect x="70" y="118" width="80" height="80" rx="6" fill="#C8821D"/>
-        <rect x="70" y="118" width="80" height="42" rx="6" fill="#E89E2F"/>
-        <g class="steam">
-          <ellipse cx="86" cy="112" rx="18" ry="12" fill="#F6EEDC"/>
-          <ellipse cx="112" cy="107" rx="22" ry="14" fill="#F6EEDC"/>
-          <ellipse cx="138" cy="112" rx="16" ry="11" fill="#F6EEDC"/>
-          <ellipse cx="64" cy="119" rx="9" ry="7" fill="#F6EEDC"/>
-        </g>
-        <circle class="bub" cx="88" cy="192" r="3.4" fill="#FBE7B8"/>
-        <circle class="bub b2" cx="112" cy="196" r="2.6" fill="#FBE7B8"/>
-        <circle class="bub b3" cx="132" cy="190" r="3" fill="#FBE7B8"/>
-        <rect x="66" y="92" width="7" height="106" rx="3.5" fill="rgba(246,238,220,.35)"/>
-        <rect x="62" y="86" width="96" height="118" rx="10" fill="none" stroke="rgba(226,238,246,.6)" stroke-width="3"/>
-      </g>
-    </svg>
+    <div id="homeBg"></div><div id="homeGlow"></div><div id="homeScrim"></div>
     <h1>もう<em>一杯</em>！</h1>
     <div class="sub">傾けて注ぐ、ギリギリゲーム</div>
     <div class="seg" role="group" aria-label="操作方式">
@@ -367,7 +371,12 @@ button{touch-action:manipulation}
     </div>
     <div id="modeHint"></div>
     <button id="voiceBtn" class="on" aria-pressed="true">声 ON</button>
-    <div id="levels" role="group" aria-label="レベル選択"></div>
+    <div id="lvPick" role="group" aria-label="レベル選択">
+      <button id="lvPrev" aria-label="前のレベル">◀</button>
+      <span class="now" id="lvNow"></span>
+      <button id="lvNext" aria-label="次のレベル">▶</button>
+    </div>
+    <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
     <div id="ver">prototype v1.1 — シーン注ぎ(上司)</div>
@@ -1286,7 +1295,8 @@ const el={home:$('home'),game:$('game'),result:$('result'),bubble:$('bubble'),te
   verdict:$('verdict'),resMeta:$('resMeta'),resScore:$('resScore'),clearTag:$('clearTag'),
   newBest:$('newBest'),nextBtn:$('nextBtn'),retryBtn:$('retryBtn'),toHome:$('toHome'),startBtn:$('startBtn'),
   modeBtnBtn:$('modeBtnBtn'),modeTiltBtn:$('modeTiltBtn'),voiceBtn:$('voiceBtn'),homeBest:$('homeBest'),
-  levels:$('levels'),modeHint:$('modeHint'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),
+  levels:$('levels'),modeHint:$('modeHint'),lvNow:$('lvNow'),lvPrev:$('lvPrev'),lvNext:$('lvNext'),
+  homeBg:$('homeBg'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),
   notice:$('notice'),debug:$('debug'),charaArea:$('charaArea'),
   foamChip:$('foamChip'),foamBar:$('foamBar'),foamWord:$('foamWord'),
   waitBar:$('waitBar'),waitFill:$('waitBar').querySelector('i')};
@@ -1519,6 +1529,7 @@ function updateHome(){
 }
 /* 選択状態とクリア印だけを付け替える */
 function refreshLevels(){
+  updateLvPick();
   if(!lvBtns) return;
   for(const k in lvBtns){
     const i=+k, b=lvBtns[k];
@@ -1526,6 +1537,15 @@ function refreshLevels(){
     b.classList.toggle('clear', i<=Save.data.highestCleared);
   }
   el.startBtn.textContent=`LEVEL ${G.selLevel} へ`;
+}
+/* 1行のレベル選択。18個を並べると画面が埋まって背景の絵が出せない */
+function updateLvPick(){
+  const n=clamp(G.selLevel,1,LEVELS.length);
+  const l=levelOf(n), c=CHARS[l.ch];
+  el.lvNow.innerHTML=`LEVEL ${l.lv}<b>${c.name}</b><i>${'★'.repeat(c.stars)}　${c.place}</i>`;
+  el.lvPrev.disabled = n<=1;
+  el.lvNext.disabled = n>=LEVELS.length;
+  el.startBtn.textContent=`LEVEL ${n} へ`;
 }
 
 /* 攻略動作の更新 §10.5 / 別紙§6 */
@@ -2267,6 +2287,10 @@ function setTiltLabel(){
     ? '✓ ボタンモード。傾けて注ぎたいときは右の「傾けて注ぐ」を押してください'
     : '押し続けるほど勢いが増し、泡が多くなります';
 }
+el.homeBg.style.backgroundImage=`url("${ART.bgs.izakaya}")`;
+const stepLevel=d=>{ G.selLevel=clamp(G.selLevel+d,1,LEVELS.length); Snd.ui(); refreshLevels(); };
+el.lvPrev.addEventListener('click',()=>stepLevel(-1));
+el.lvNext.addEventListener('click',()=>stepLevel(1));
 el.modeBtnBtn.addEventListener('click',()=>setMode('button'));
 
 el.modeTiltBtn.addEventListener('click',async()=>{
