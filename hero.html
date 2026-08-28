@@ -149,10 +149,11 @@ body{
 
 
 /* --- D: 居酒屋の店内(生成済みの背景をそのまま使う) --- */
-#izaBg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center 38%}
+#izaBg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center 38%;
+  filter:brightness(1.42) saturate(1.18) contrast(1.04)}
 #izaScrim{position:absolute;inset:0;z-index:0;pointer-events:none;background:
-  linear-gradient(180deg, rgba(10,6,3,.86) 0%, rgba(10,6,3,.42) 26%,
-                          rgba(10,6,3,.58) 58%, rgba(8,5,2,.92) 100%)}
+  linear-gradient(180deg, rgba(10,6,3,.52) 0%, rgba(10,6,3,.14) 24%,
+                          rgba(10,6,3,.28) 56%, rgba(8,5,2,.68) 100%)}
 #home[data-hero="izakaya"]{background:#0B0704;justify-content:center;
   padding-top:calc(env(safe-area-inset-top,0px) + 26px)}
 /* 選択中は琥珀で塗る。上の背景指定が .on より強いので個別に戻す */
@@ -172,7 +173,7 @@ body{
   color:#C0AC8A;text-shadow:0 1px 6px rgba(0,0,0,.85)}
 /* 提灯のような灯りをゆらす */
 #izaGlow{position:absolute;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(46% 22% at 62% 16%, rgba(255,186,92,.30), transparent 70%);
+  background:radial-gradient(52% 26% at 62% 16%, rgba(255,196,104,.42), transparent 70%);
   animation:izaFlick 5.5s ease-in-out infinite}
 @keyframes izaFlick{0%,100%{opacity:.85}45%{opacity:1}70%{opacity:.78}}
 /* --- B: 巨大なグラスの中 --- */
