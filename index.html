@@ -1898,6 +1898,16 @@ function renderScene(now){
     const R=X(gl.topR)+(X(gl.botR)-X(gl.topR))*t;
     return {L,R,C:(L+R)/2};
   };
+  // 縁を上から覗き込む構図では、液面は水平な直線ではなく楕円に見える。
+  // 直線で描くと満杯でも楕円の中央止まりに見え、奥側にグラスが残って
+  // 「まだ入る」と読めてしまう。ギリギリのラインが分からない原因はこれ。
+  const rimRy=(gl.ry||0)*dh;                       // 縁の楕円の縦半径(画面px)
+  const ryAt=y=>{ const w=hwAt(y); const w0=hwAt(topY);
+    return rimRy * ((w.R-w.L)/Math.max(w0.R-w0.L,1e-6)); };
+  /* 液面を楕円の「奥側の弧」で描く。手前側の縁より高い位置が液面の上端になる */
+  const surface=(y,dir)=>{ const w=hwAt(y), ry=ryAt(y);
+    ctx.ellipse(w.C, y, Math.max((w.R-w.L)/2,0.1), Math.max(ry,0.1), 0,
+                dir>0?Math.PI:0, dir>0?Math.PI*2:Math.PI); };
   const fillL=clamp(s.L/s.C,0,1), fillP=clamp(s.P/s.C,0,1);
   const innerH=botY-topY;
   const yL=botY-innerH*fillL;
@@ -1914,11 +1924,13 @@ function renderScene(now){
     const grad=ctx.createLinearGradient(0,yL,0,botY);
     grad.addColorStop(0,'rgba(244,176,66,0.72)'); grad.addColorStop(1,'rgba(178,106,20,0.78)');
     ctx.fillStyle=grad;
+    const ys=Math.min(yL+wob,botY);
+    const a=hwAt(ys), b=hwAt(botY);
     ctx.beginPath();
-    const a=hwAt(Math.min(yL+wob,botY)), b=hwAt(botY);
-    ctx.moveTo(b.L,botY); ctx.lineTo(a.L,yL+wob);
-    ctx.quadraticCurveTo(a.C,yL-wob,a.R,yL+wob);
-    ctx.lineTo(b.R,botY); ctx.closePath(); ctx.fill();
+    surface(ys,+1);                    // 液面: 奥側の弧(上を通る)
+    ctx.lineTo(b.R,botY);
+    surface(botY,-1);                  // 底: 手前側の弧(下を通る)
+    ctx.closePath(); ctx.fill();
     // 上昇する気泡
     ctx.fillStyle='rgba(255,235,190,0.5)';
     for(let i=bubblesFx.length-1;i>=0;i--){
@@ -1936,15 +1948,12 @@ function renderScene(now){
   if(fillP>0.004){
     ctx.save(); clipGlass(); ctx.clip();
     ctx.fillStyle='rgba(248,241,225,0.95)';
+    const yTop=Math.max(yP,topY), a=hwAt(yL);
     ctx.beginPath();
-    const a=hwAt(yL), c=hwAt(Math.max(yP,topY));
-    ctx.moveTo(a.L,yL+1); ctx.lineTo(c.L,Math.max(yP,topY)+2);
-    const n=5;
-    for(let i=0;i<=n;i++){
-      const x=c.L+(c.R-c.L)*i/n;
-      ctx.lineTo(x, Math.max(yP,topY)+Math.sin(now/300+i*1.7)*1.4+(i%2?1.5:0));
-    }
-    ctx.lineTo(a.R,yL+1); ctx.closePath(); ctx.fill();
+    surface(yTop,+1);                  // 泡の上面
+    ctx.lineTo(a.R,yL+1);
+    surface(yL,-1);                    // 泡とビールの境目
+    ctx.closePath(); ctx.fill();
     ctx.restore();
   }
   // 95%の縁きらめき
@@ -1952,13 +1961,14 @@ function renderScene(now){
   if(F>=0.95&&!s.out){
     ctx.strokeStyle=`rgba(255,200,90,${0.4+0.3*Math.sin(now/120)})`;
     ctx.lineWidth=2.5;
-    ctx.beginPath();ctx.moveTo(X(gl.topL),topY);ctx.lineTo(X(gl.topR),topY);ctx.stroke();
+    ctx.beginPath(); surface(topY,+1); ctx.stroke();
   }
   // 溢れ: 縁から外側へ垂れる
   if(s.ovf>0){
     ctx.fillStyle='rgba(248,241,225,0.9)';
     ctx.beginPath();
-    ctx.ellipse((X(gl.topL)+X(gl.topR))/2, topY-1, (X(gl.topR)-X(gl.topL))*0.55, 4, 0, 0, Math.PI*2);
+    ctx.ellipse((X(gl.topL)+X(gl.topR))/2, topY-1, (X(gl.topR)-X(gl.topL))*0.52,
+                Math.max(rimRy,3), 0, 0, Math.PI*2);
     ctx.fill();
     if(G.phase==='ovfShow'&&Math.random()<0.5)
       drips.push({x:Math.random()<0.5?X(gl.topL)+2:X(gl.topR)-2, y:topY, v:0});
