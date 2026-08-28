@@ -147,6 +147,34 @@ body{
 #home[data-hero="beer3"] #homeBest{color:#6B3806}
 #home[data-hero="beer3"] #ver{color:#8A5312}
 
+
+/* --- D: 居酒屋の店内(生成済みの背景をそのまま使う) --- */
+#izaBg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center 38%}
+#izaScrim{position:absolute;inset:0;z-index:0;pointer-events:none;background:
+  linear-gradient(180deg, rgba(10,6,3,.86) 0%, rgba(10,6,3,.42) 26%,
+                          rgba(10,6,3,.58) 58%, rgba(8,5,2,.92) 100%)}
+#home[data-hero="izakaya"]{background:#0B0704;justify-content:center;
+  padding-top:calc(env(safe-area-inset-top,0px) + 26px)}
+/* 選択中は琥珀で塗る。上の背景指定が .on より強いので個別に戻す */
+#home[data-hero="izakaya"] .seg button.on{background:var(--amber);color:#221503}
+#home[data-hero="izakaya"] #voiceBtn.on{background:var(--amber);border-color:var(--amber);color:#221503}
+#home[data-hero="izakaya"] #levels .lvbtns button.sel{background:var(--amber);color:#221503;border-color:var(--amber)}
+#home[data-hero="izakaya"] #levels .lvbtns button.clear{border-color:rgba(232,161,60,.7)}
+#home[data-hero="izakaya"] h1{color:#FBEFD8;text-shadow:0 2px 14px rgba(0,0,0,.85),0 0 30px rgba(232,161,60,.4)}
+#home[data-hero="izakaya"] h1 em{color:#FFC059}
+#home[data-hero="izakaya"] .sub{color:#D9C6A6;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+#home[data-hero="izakaya"] #modeHint{color:#CBB795;opacity:1;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+#home[data-hero="izakaya"] .lvname{color:#C8B593;text-shadow:0 1px 5px rgba(0,0,0,.8)}
+#home[data-hero="izakaya"] .seg{background:rgba(14,9,5,.72);border-color:rgba(232,161,60,.45)}
+#home[data-hero="izakaya"] #voiceBtn{background:rgba(14,9,5,.72);border-color:rgba(232,161,60,.45)}
+#home[data-hero="izakaya"] #levels .lvbtns button{background:rgba(14,9,5,.66);border-color:rgba(232,161,60,.34)}
+#home[data-hero="izakaya"] #homeBest,#home[data-hero="izakaya"] #ver{
+  color:#C0AC8A;text-shadow:0 1px 6px rgba(0,0,0,.85)}
+/* 提灯のような灯りをゆらす */
+#izaGlow{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(46% 22% at 62% 16%, rgba(255,186,92,.30), transparent 70%);
+  animation:izaFlick 5.5s ease-in-out infinite}
+@keyframes izaFlick{0%,100%{opacity:.85}45%{opacity:1}70%{opacity:.78}}
 /* --- B: 巨大なグラスの中 --- */
 #home[data-hero="glass"]{
   background:
@@ -458,6 +486,7 @@ button{touch-action:manipulation}
   <circle cx="384" cy="104" r="8" fill="#FDF8EC"/>
 </svg>
     <div id="rays"></div>
+    <div id="izaBg"></div><div id="izaGlow"></div><div id="izaScrim"></div>
     <div id="bubLayer"><i class="hb" style="left:32.4%;--r:3.8px;--d:8.7s;--dl:0.7s;--x:1px"></i><i class="hb" style="left:36.4%;--r:3.0px;--d:7.8s;--dl:0.3s;--x:-2px"></i><i class="hb" style="left:8.6%;--r:3.3px;--d:7.3s;--dl:7.4s;--x:-14px"></i><i class="hb" style="left:23.0%;--r:7.8px;--d:10.7s;--dl:5.2s;--x:-4px"></i><i class="hb" style="left:93.8%;--r:2.9px;--d:10.1s;--dl:2.6s;--x:-13px"></i><i class="hb" style="left:13.1%;--r:5.1px;--d:9.8s;--dl:1.6s;--x:3px"></i><i class="hb" style="left:62.1%;--r:5.7px;--d:8.1s;--dl:0.6s;--x:-16px"></i><i class="hb" style="left:21.4%;--r:8.3px;--d:7.3s;--dl:2.8s;--x:3px"></i><i class="hb" style="left:44.6%;--r:5.0px;--d:9.7s;--dl:6.3s;--x:-9px"></i><i class="hb" style="left:56.0%;--r:7.0px;--d:10.2s;--dl:6.6s;--x:-8px"></i><i class="hb" style="left:94.1%;--r:3.5px;--d:7.2s;--dl:6.8s;--x:-13px"></i><i class="hb" style="left:48.0%;--r:2.8px;--d:8.8s;--dl:6.9s;--x:3px"></i><i class="hb" style="left:84.3%;--r:5.2px;--d:9.0s;--dl:5.3s;--x:3px"></i><i class="hb" style="left:44.9%;--r:9.6px;--d:10.6s;--dl:4.3s;--x:6px"></i><i class="hb" style="left:7.7%;--r:8.5px;--d:8.7s;--dl:8.9s;--x:12px"></i><i class="hb" style="left:28.8%;--r:5.8px;--d:8.8s;--dl:0.2s;--x:-1px"></i><i class="hb" style="left:17.8%;--r:3.5px;--d:4.9s;--dl:6.9s;--x:-13px"></i><i class="hb" style="left:25.3%;--r:5.8px;--d:10.2s;--dl:0.7s;--x:-2px"></i><i class="hb" style="left:53.6%;--r:10.0px;--d:9.8s;--dl:7.8s;--x:-8px"></i><i class="hb" style="left:41.0%;--r:5.5px;--d:10.2s;--dl:8.6s;--x:-13px"></i><i class="hb" style="left:18.6%;--r:4.5px;--d:6.0s;--dl:4.4s;--x:3px"></i><i class="hb" style="left:26.7%;--r:2.5px;--d:7.2s;--dl:3.3s;--x:2px"></i><i class="hb" style="left:91.6%;--r:8.4px;--d:7.9s;--dl:5.6s;--x:6px"></i><i class="hb" style="left:7.1%;--r:10.1px;--d:9.6s;--dl:7.9s;--x:11px"></i><i class="hb" style="left:38.9%;--r:5.9px;--d:5.2s;--dl:5.7s;--x:-16px"></i><i class="hb" style="left:8.3%;--r:4.3px;--d:5.6s;--dl:3.1s;--x:-16px"></i><i class="hb" style="left:2.0%;--r:3.8px;--d:5.2s;--dl:3.3s;--x:-17px"></i><i class="hb" style="left:84.2%;--r:7.7px;--d:5.5s;--dl:2.3s;--x:-5px"></i><i class="hb" style="left:36.2%;--r:3.5px;--d:10.0s;--dl:8.9s;--x:-1px"></i><i class="hb" style="left:47.5%;--r:3.2px;--d:5.2s;--dl:3.1s;--x:-8px"></i></div>
     <svg id="glassBg" viewBox="0 0 412 760" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
   <defs><linearGradient id="hbeer" x1="0" y1="0" x2="0" y2="1">
@@ -2461,12 +2490,16 @@ syncVoiceBtn(); setTiltLabel();
   const HM=document.getElementById('heroMug');
   if(h) el.home.dataset.hero=h;
   const FT=document.getElementById('foamTop'), RY=document.getElementById('rays');
+  const IB=document.getElementById('izaBg'), IS=document.getElementById('izaScrim'), IG=document.getElementById('izaGlow');
+  const iza = h==='izakaya';
+  if(iza) IB.style.backgroundImage='url("'+ART.bgs.izakaya+'")';
+  IB.style.display=IS.style.display=IG.style.display = iza ? '' : 'none';
   L.style.display = (h==='beer'||h==='glass'||h==='beer2'||h==='beer3') ? '' : 'none';
   FT.style.display = (h==='beer2'||h==='beer3') ? '' : 'none';
   RY.style.display = (h==='beer2'||h==='beer3') ? '' : 'none';
   GB.style.display = h==='glass' ? '' : 'none';
   PA.style.display = h==='pour' ? '' : 'none';
-  if(h==='glass'||h==='pour'||h==='beer2') HM.style.display='none';
+  if(h==='glass'||h==='pour'||h==='beer2'||h==='izakaya') HM.style.display='none';
   if(h==='beer') HM.style.opacity='.9';
 })();
 
@@ -2527,13 +2560,13 @@ window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,b
   background:rgba(12,8,4,.94);border-top:1px solid #4A3A26;
   padding:8px calc(env(safe-area-inset-left,0px) + 8px) calc(env(safe-area-inset-bottom,0px) + 8px)}
 #heroSw button{flex:1;appearance:none;border:1px solid #5A4630;background:#241A11;color:#E9DCC6;
-  font:inherit;font-size:13px;font-weight:700;padding:11px 4px;margin:0 3px;border-radius:10px}
+  font:inherit;font-size:12px;font-weight:700;padding:11px 2px;margin:0 3px;border-radius:10px}
 #heroSw button.on{background:#E8A13C;color:#221503;border-color:#E8A13C}
 #stage{bottom:58px!important;height:calc(100dvh - 58px)!important}
 </style>
 <div id="heroSw">
-  <button data-h="">現行</button><button data-h="beer">A</button>
-  <button data-h="beer2">B</button><button data-h="beer3">C</button>
+  <button data-h="">現行</button><button data-h="izakaya">居酒屋</button>
+  <button data-h="beer">泡A</button><button data-h="beer3">泡C</button>
 </div>
 <script>
 (()=>{const cur=(location.search.match(/[?&]hero=(\w+)/)||[])[1]||'';
