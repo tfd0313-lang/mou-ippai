@@ -2000,12 +2000,19 @@ function renderScene(now){
     ctx.closePath(); ctx.fill();
     ctx.restore();
   }
-  // 95%の縁きらめき
+  // 縁の線。ここが満杯の基準なので、常にうっすら出して狙う場所を示す。
+  // 何も出さないと、絵のグラスのどこに合わせるのかが読めない
   const F=(s.L+s.P)/s.C;
-  if(F>=0.95&&!s.out){
-    ctx.strokeStyle=`rgba(255,200,90,${0.4+0.3*Math.sin(now/120)})`;
-    ctx.lineWidth=2.5;
-    ctx.beginPath(); surface(topY,+1); ctx.stroke();
+  if(!s.out){
+    const near=clamp((F-0.55)/0.40,0,1);
+    const hot=F>=0.95;
+    ctx.strokeStyle = hot ? `rgba(255,200,90,${0.5+0.3*Math.sin(now/120)})`
+                          : `rgba(255,230,180,${0.14+0.30*near})`;
+    ctx.lineWidth = hot ? 2.5 : 1.8;
+    const w0=hwAt(topY);
+    ctx.beginPath();
+    ctx.ellipse(w0.C, topY, Math.max((w0.R-w0.L)/2,0.1), Math.max(rimRy,0.1), 0, 0, Math.PI*2);
+    ctx.stroke();
   }
   // 溢れ: 縁から外側へ垂れる
   if(s.ovf>0){
