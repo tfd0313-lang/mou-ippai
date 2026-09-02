@@ -936,7 +936,7 @@ const BGS = {mama:'dining', obaa:'dining', ojiichan:'dining',
              yopparai:'robata', tomodachi:'robata', toorisugari:'robata',
              okami:'oldrobata', shujin:'oldrobata', yoitsubure:'oldrobata'};
 const TABLE_COLOR = {dining:'#4A3524', living:'#3A2C20', izakaya:'#271B10',
-                     counter:'#3E2C1B', robata:'#2E2216', oldrobata:'#33251644'};
+                     counter:'#3E2C1B', robata:'#2E2216', oldrobata:'#332516'};
 
 /* ---------- 保存 §18 (schema v2) ---------- */
 const Save = {
@@ -946,7 +946,13 @@ const Save = {
   load(){ try{
     const raw=localStorage.getItem(this.key); if(!raw) return;
     const d=JSON.parse(raw); if(!d) return;
-    if(d.schemaVersion===2){ this.data=Object.assign(this.data,d); }
+    if(d.schemaVersion===2){
+      this.data=Object.assign(this.data,d);
+      // 型が壊れた保存(手動改変など)で記録更新時に落ち、メインループごと
+      // 止まるのを防ぐ。形が合わないものは既定値に戻す
+      if(!this.data.bestByLevel || typeof this.data.bestByLevel!=='object') this.data.bestByLevel={};
+      if(!this.data.best || typeof this.data.best!=='object') this.data.best={button:0,tilt:0};
+    }
     else if(d.schemaVersion===1){          // v1移行: 記録類のみ引き継ぐ
       this.data.best=d.best||this.data.best;
       this.data.totalSuccess=d.totalSuccess||0;
@@ -1338,13 +1344,15 @@ let curScene=null, sceneImgs={}, scenePending=false;
    取りに行かずそのまま使う。 */
 const sceneData = Object.assign({}, ART.scene||{});
 const sceneLoading = {};
+const sceneFailed = {};   // 失敗を覚える。覚えないと入るたびに5秒待たされる
 function ensureScene(chId){
   if(!SCENE_IDS.includes(chId) || sceneData[chId]) return Promise.resolve();
   if(sceneLoading[chId]) return sceneLoading[chId];
   sceneLoading[chId] = fetch('art/'+chId+'.json')
     .then(r=>r.ok?r.json():null)
     .then(d=>{
-      if(!d) return;
+      if(!d){ sceneFailed[chId]=true; delete sceneLoading[chId]; return; }
+      sceneFailed[chId]=false;
       sceneData[chId]=d;
       // 画像の実体化まで待つ。待たずに描画へ入ると舞台が真っ暗になる
       sceneImgs[chId]={};
@@ -1353,7 +1361,8 @@ function ensureScene(chId){
         sceneImgs[chId][k]=im;
       })));
     })
-    .catch(()=>{});   // 失敗してもSVGのキャラで遊べる
+    .catch(()=>{ sceneFailed[chId]=true; delete sceneLoading[chId]; });
+    // 失敗してもSVGのキャラで遊べる。次にこのキャラへ入ったとき取り直す
   return sceneLoading[chId];
 }
 /* 次のレベルを先に取っておく。結果表示中に読み終わるので待ち時間が消える */
@@ -1373,7 +1382,7 @@ function setChara(chId){
   // 絵があるキャラなのに、まだ読み込めていない状態。ここで仮のSVGキャラを出すと
   // 導入の暗幕ごしに透けて、本物の絵と入れ替わるところが見えてしまう。
   // 読み終わるまで何も出さない
-  scenePending = !sc && SCENE_IDS.includes(chId);
+  scenePending = !sc && SCENE_IDS.includes(chId) && !sceneFailed[chId];
   Object.values(charaEls).forEach(s=>s.classList.remove('on'));
   curChara=charaEls[chId];
   if(curScene || scenePending){
@@ -1469,14 +1478,6 @@ function startLevel(n, retry){
   G.res=null; G.judged=false; G.retry=!!retry; G.resultShown=false;
   G.hz=newHazardState(lvl); G.glassOff={x:0,y:0,rot:0};
   G.fake=newFakeState(lvl);
-  // 演出動作(胴体のみ)。判定へは影響しない
-  const swayTarget = curPhoto ? photoEl : curChara;
-  [photoEl, curChara].forEach(e=>e.classList.remove('decor-sway'));
-  if(lvl.decorSway){
-    swayTarget.classList.add('decor-sway');
-    swayTarget.style.setProperty('--sway-amp', (lvl.decorSway/3)+'px');
-    swayTarget.style.setProperty('--sway-dur', (lvl.sway?lvl.sway.period:2.6)+'s');
-  }
   Input.enabled=false; Input.resetRound();
   el.result.classList.remove('on'); el.telemark.classList.remove('on');
   el.waitBar.classList.remove('on');
@@ -1484,6 +1485,23 @@ function startLevel(n, retry){
   bubble(null);
   ensureScene(lvl.ch);
   setChara(lvl.ch); setFace('neutral');
+  if(retry && scenePending){
+    // リトライは導入画面(読み込み待ち)を通らない。待ちのままだと何も
+    // 描かれずに注ぎだけ始まってしまうので、仮のSVGキャラで再開する
+    scenePending=false;
+    curChara.classList.add('on');
+  }
+  // 演出動作(胴体のみ)。判定へは影響しない。
+  // setCharaより前にやると curChara がまだ前のレベルのキャラを指していて、
+  // 揺れが前のキャラに付いたまま残る(初回に揺れない・別レベルで揺れ続ける)
+  Object.values(charaEls).forEach(e=>e.classList.remove('decor-sway'));
+  photoEl.classList.remove('decor-sway');
+  if(lvl.decorSway){
+    const swayTarget = curPhoto ? photoEl : curChara;
+    swayTarget.classList.add('decor-sway');
+    swayTarget.style.setProperty('--sway-amp', (lvl.decorSway/3)+'px');
+    swayTarget.style.setProperty('--sway-dur', (lvl.sway?lvl.sway.period:2.6)+'s');
+  }
   (curPhoto?photoEl:curChara).classList.remove('tele');
   el.game.dataset.bg=BGS[lvl.ch];
   el.game.dataset.stage=stageOf(lvl);   // 1:通常 2:照明を落とす 3:環境演出を足す
@@ -1683,7 +1701,7 @@ function update(dt){
     case 'intro':{
       // 画像の読み込みが終わるまで導入表示のまま待つ(上限5秒)。
       // 間に合わなければSVGのキャラのまま進める
-      const ready = !SCENE_IDS.includes(lvl.ch) || sceneData[lvl.ch] || G.t>=5;
+      const ready = !SCENE_IDS.includes(lvl.ch) || sceneData[lvl.ch] || sceneFailed[lvl.ch] || G.t>=5;
       if(G.t>=0.8 && ready){
         if(sceneData[lvl.ch] && !curScene){ setChara(lvl.ch); setFace('neutral'); }
         else if(scenePending){
