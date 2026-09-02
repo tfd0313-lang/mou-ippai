@@ -394,7 +394,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v2.0 — LV1〜10はイラスト</div>
+    <div id="ver">prototype v2.1 — LV1〜10はイラスト</div>
   </div>
 
   <!-- ゲーム -->
@@ -664,7 +664,7 @@ const CFG = {
   RAMP:0.12,
   // 注ぎを止めてからの猶予。実際のビールと同じく「泡が落ち着くのを待って
   // 注ぎ足す」ができる長さにする。この間に再入力すれば同じ注ぎとして続く
-  GRACE:1.60, SETTLE:1.85,
+  GRACE:1.60, SETTLE:1.85,   // GRACEは既定値。実際はレベルごとに graceOf() で決める
   FOAM_LO:0.05, FOAM_HI:0.26, FOAM_EXP:1.5, FOAM_EXPANSION:1.6,
   // 泡は待てば目に見えて崩れ、その多くが液体へ戻る。
   // 泡が多すぎたら手を止めて待つ、が有効な立て直し手段になる
@@ -891,44 +891,47 @@ const GLASSES = {
   thin:   {cap:0.70, wFrac:0.24, hFrac:0.44, taper:0.88, handle:false}, // 薄い小グラス
 };
 /* 別紙仕様書 §3 レベル進行一覧 (LEVEL 1〜9) */
+/* 注ぎをやめてから判定までの猶予。前半はゆっくり泡を待って注ぎ足せるが、
+   後半の客はせっかちで、待ってくれない。速さと並ぶ体感の難しさの柱 */
+function graceOf(lvl){ return clamp(2.3-0.08*lvl.lv, 0.9, 2.2); }
 const LEVELS = [
-  {lv:1, ch:'mama', glass:'wide',   fillSec:6.5, foamMult:1.35, order:'any',    hazard:null},
-  {lv:2, ch:'obaa', glass:'wide',   fillSec:6.0, foamMult:1.35, order:'foamy',  hazard:null},
-  {lv:3, ch:'ojiichan', glass:'wide',   fillSec:5.8, foamMult:1.35, order:'foamy',
+  {lv:1, ch:'mama', glass:'wide',   fillSec:7.5, foamMult:1.35, order:'any',    hazard:null},
+  {lv:2, ch:'obaa', glass:'wide',   fillSec:7.0, foamMult:1.35, order:'foamy',  hazard:null},
+  {lv:3, ch:'ojiichan', glass:'wide',   fillSec:6.6, foamMult:1.35, order:'foamy',
     hazard:{tel:0.70, type:'rotate', mag:4,  intake:0.60, trig:[0.87,0.90], name:'持ち替え'}},
-  {lv:4, ch:'musuko', glass:'jockey', fillSec:6.0, foamMult:1.0,  order:'normal', hazard:null},
-  {lv:5, ch:'papa', glass:'jockey', fillSec:5.6, foamMult:1.0,  order:'normal',
+  {lv:4, ch:'musuko', glass:'jockey', fillSec:6.2, foamMult:1.0,  order:'normal', hazard:null},
+  {lv:5, ch:'papa', glass:'jockey', fillSec:5.8, foamMult:1.0,  order:'normal',
     hazard:{tel:0.70, type:'lower',  mag:8,  intake:1.00, trig:[0.68,0.78], name:'頷き', safe:true}},
-  {lv:6, ch:'oji', glass:'jockey', fillSec:5.3, foamMult:1.0,  order:'normal',
+  {lv:6, ch:'oji', glass:'jockey', fillSec:5.4, foamMult:1.0,  order:'normal',
     hazard:{tel:0.65, type:'shift',  mag:24, intake:0.45, trig:[0.87,0.91], name:'咳'}},
   {lv:7, ch:'senpai', glass:'pilsner',fillSec:5.0, foamMult:1.0,  order:'normal', hazard:null},
-  {lv:8, ch:'boss', glass:'pilsner',fillSec:4.8, foamMult:1.0,  order:'normal',
+  {lv:8, ch:'boss', glass:'pilsner',fillSec:4.7, foamMult:1.0,  order:'normal',
     hazard:{tel:0.60, type:'rotate', mag:6,  intake:0.50, trig:[0.87,0.91], name:'腕時計'}},
-  {lv:9, ch:'shacho', glass:'pilsner',fillSec:4.6, foamMult:1.0,  order:'normal',
+  {lv:9, ch:'shacho', glass:'pilsner',fillSec:4.4, foamMult:1.0,  order:'normal',
     hazard:{tel:0.55, type:'lower',  mag:36, intake:0.40, trig:[0.87,0.91], name:'スマホ'}},
   // --- 居酒屋のおじさん(★★★★) 中ジョッキ。安全な体揺れの中から予兆を見分ける ---
-  {lv:10, ch:'tonari', glass:'medium', fillSec:5.0, foamMult:1.0, order:'normal', foamTight:0.8,
+  {lv:10, ch:'tonari', glass:'medium', fillSec:4.5, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.6}, hazard:null},
-  {lv:11, ch:'ojisan', glass:'medium', fillSec:4.8, foamMult:1.0, order:'normal', foamTight:0.8,
+  {lv:11, ch:'ojisan', glass:'medium', fillSec:4.3, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.6},
     hazard:{tel:0.55, type:'shift', mag:40, intake:0.35, trig:[0.88,0.92], name:'隣を見る'}},
-  {lv:12, ch:'taisho', glass:'medium', fillSec:4.6, foamMult:1.0, order:'normal', foamTight:0.8,
+  {lv:12, ch:'taisho', glass:'medium', fillSec:4.1, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.2},
     hazard:{tel:0.50, type:'shiftrot', mag:40, rot:3, intake:0.30, trig:[0.88,0.92], name:'引きながら回転'}},
   // --- 酔っ払い(★★★★★) 大きな演出揺れ。曇りグラスで液面が見にくい ---
-  {lv:13, ch:'yopparai', glass:'small', fillSec:4.8, foamMult:1.05, order:'normal', foamTight:0.65,
+  {lv:13, ch:'yopparai', glass:'small', fillSec:4.2, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24, hazard:null},
-  {lv:14, ch:'tomodachi', glass:'frosted', fillSec:4.5, foamMult:1.05, order:'normal', foamTight:0.65,
+  {lv:14, ch:'tomodachi', glass:'frosted', fillSec:3.9, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24,
     hazard:{tel:0.50, type:'shift', mag:28, intake:0.35, trig:[0.87,0.90], name:'しゃっくり', maxTrig:0.90}},
-  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:4.2, foamMult:1.05, order:'normal', foamTight:0.65,
+  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:3.7, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24, fake:{at:[0.62,0.72], dur:0.45},
     hazard:{tel:0.45, type:'shift', mag:36, intake:0.30, trig:[0.87,0.90], name:'本しゃっくり', maxTrig:0.90}},
   // --- 常連のおじいちゃん(★★★★★★) 通常編最終戦。最も速く、予兆が最短 ---
-  {lv:16, ch:'okami', glass:'thin', fillSec:4.4, foamMult:1.0, order:'normal', foamTight:0.5, hazard:null},
-  {lv:17, ch:'shujin', glass:'thin', fillSec:4.1, foamMult:1.0, order:'normal', foamTight:0.5,
+  {lv:16, ch:'okami', glass:'thin', fillSec:3.8, foamMult:1.0, order:'normal', foamTight:0.5, hazard:null},
+  {lv:17, ch:'shujin', glass:'thin', fillSec:3.5, foamMult:1.0, order:'normal', foamTight:0.5,
     hazard:{tel:0.45, type:'shift', mag:48, intake:0.25, trig:[0.91,0.93], name:'引く'}},
-  {lv:18, ch:'yoitsubure', glass:'thin', fillSec:3.9, foamMult:1.0, order:'normal', foamTight:0.5,
+  {lv:18, ch:'yoitsubure', glass:'thin', fillSec:3.3, foamMult:1.0, order:'normal', foamTight:0.5,
     hazard:{tel:0.40, type:'shiftrot', mag:56, rot:5, intake:0.20, trig:[0.91,0.93], name:'引き＋回転'}},
 ];
 /* 背景は場所ごと。同じ場所に3人が順に登場する */
@@ -1524,7 +1527,8 @@ function startLevel(n, retry){
     // 何が難しくなったのかを言葉で見せる。速さと泡の要求は画面から読み取れない
     const io_=foamOrder(lvl);
     el.introInfo.innerHTML=
-      `満杯まで <b>${lvl.fillSec}秒</b>　泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
+      `満杯まで <b>${lvl.fillSec}秒</b>　猶予 <b>${graceOf(lvl).toFixed(1)}秒</b>　`+
+      `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (lvl.hazard?`邪魔 <b>${lvl.hazard.name}</b>`:'邪魔 <b>なし</b>');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
@@ -1787,7 +1791,7 @@ function update(dt){
       // 手を止めている間は「まだ注ぎ足せる」ことと残り時間を見せる
       if(s.poured && s.Q<=0){
         el.waitBar.classList.add('on');
-        el.waitFill.style.transform='scaleX('+clamp(1-s.zeroT/CFG.GRACE,0,1)+')';
+        el.waitFill.style.transform='scaleX('+clamp(1-s.zeroT/graceOf(G.lvl),0,1)+')';
       } else {
         el.waitBar.classList.remove('on');
       }
@@ -1806,7 +1810,7 @@ function update(dt){
         setPhase('ovfShow');
         break;
       }
-      if(s.poured&&s.zeroT>=CFG.GRACE){
+      if(s.poured&&s.zeroT>=graceOf(G.lvl)){
         Input.enabled=false; el.pourBtn.disabled=true;
         el.waitBar.classList.remove('on');
         Snd.silence();
