@@ -75,6 +75,7 @@ body{
 /* レベル選択: 18個並べると画面を埋めて絵が出せないので1行にまとめる */
 #levels[hidden]{display:none}
 #lvPick{display:flex;align-items:center;gap:10px;width:100%;max-width:340px;
+  margin-top:10px;   /* 上の設定群と区切って「ここからが本編」のリズムを作る */
   background:rgba(16,10,6,.86);border:1px solid rgba(232,161,60,.45);border-radius:14px;padding:9px 11px}
 #lvPick button{appearance:none;border:0;background:rgba(232,161,60,.22);color:#F6E7CB;
   width:40px;height:40px;border-radius:10px;font:inherit;font-size:17px;font-weight:700;
@@ -87,18 +88,10 @@ body{
 /* 画面の低い端末では詰めて、スクロールせずに「はじめる」まで届かせる */
 @media (max-height:800px){
   #home{gap:8px}
-  #heroMug{width:min(24%,96px)}
   #home h1{font-size:clamp(26px,7.5vw,34px)}
   #levels{gap:4px}
   #home .sub{font-size:12px}
 }
-#heroMug{width:min(34%,140px);flex:0 0 auto;display:block;filter:drop-shadow(0 14px 24px rgba(0,0,0,.55))}
-#heroMug .bub{animation:rise 2.6s linear infinite;opacity:0}
-#heroMug .bub.b2{animation-delay:.9s}
-#heroMug .bub.b3{animation-delay:1.7s}
-@keyframes rise{0%{transform:translateY(0);opacity:0}12%{opacity:.85}100%{transform:translateY(-58px);opacity:0}}
-#heroMug .steam{animation:foamPuff 3.2s ease-in-out infinite}
-@keyframes foamPuff{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 #home h1{
   font-family:"Shippori Mincho B1",serif;font-weight:800;
   font-size:clamp(32px,9.5vw,46px);letter-spacing:.06em;line-height:1.1;text-wrap:balance;
@@ -114,10 +107,11 @@ button{touch-action:manipulation}
 .seg button:active{background:rgba(232,161,60,.34)}
 #voiceBtn:active{transform:scale(.94)}
 #levels .lvbtns button:active{transform:scale(.88);background:var(--amber);color:#221503}
-#modeHint{color:var(--mut);font-size:11px;line-height:1.6;max-width:300px;opacity:.85}
+#modeHint{color:var(--mut);font-size:12px;line-height:1.6;max-width:300px}
 #voiceBtn{appearance:none;cursor:pointer;font:inherit;font-size:12px;letter-spacing:.08em;
   color:var(--mut);background:var(--wood);border:1px solid var(--wood-hi);border-radius:999px;padding:8px 16px}
-#voiceBtn.on{color:#221503;background:var(--amber);border-color:var(--amber);font-weight:700}
+/* ONでも塗りつぶさない。塗りのアンバーは「はじめる」だけにして視線を取り合わない */
+#voiceBtn.on{color:var(--amber);background:rgba(232,161,60,.16);border-color:var(--amber);font-weight:700}
 #levels{display:flex;flex-direction:column;gap:5px;width:100%;max-width:320px}
 .lvrow{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .lvname{color:var(--mut);font-size:11px;letter-spacing:.04em;white-space:nowrap;
@@ -135,7 +129,7 @@ button{touch-action:manipulation}
   appearance:none;border:0;cursor:pointer;
   font-family:"Shippori Mincho B1",serif;font-weight:800;font-size:20px;letter-spacing:.14em;
   color:#221503;background:linear-gradient(180deg,#F1B054,var(--amber-deep));
-  padding:16px 44px;border-radius:14px;
+  padding:16px 44px;border-radius:16px;
   box-shadow:0 6px 0 #7A4A0C,0 10px 24px rgba(0,0,0,.5);
 }
 #startBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #7A4A0C}
@@ -271,6 +265,7 @@ button{touch-action:manipulation}
 #hud{
   position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;z-index:3;
   color:var(--mut);font-size:12px;letter-spacing:.08em;font-variant-numeric:tabular-nums;
+  text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6);
 }
 #hud b{color:var(--amber);font-weight:700}
 #cv{flex:1 1 auto;min-height:0;width:100%;display:block}
@@ -331,6 +326,12 @@ button{touch-action:manipulation}
   font-family:"Shippori Mincho B1",serif;font-weight:800;
   font-size:clamp(38px,11vw,54px);letter-spacing:.08em;text-align:center;text-wrap:balance;
   animation:stamp .28s cubic-bezier(.2,1.6,.4,1) both;
+  position:relative;
+}
+/* 成功したときだけ、判定の字の後ろに提灯のような光を灯す */
+#result.ok #verdict::before{
+  content:"";position:absolute;inset:-46px -90px;z-index:-1;border-radius:50%;
+  background:radial-gradient(50% 50%,rgba(232,161,60,.26),transparent 70%);
 }
 @keyframes stamp{from{opacity:0;transform:scale(1.7) rotate(-4deg)}to{opacity:1;transform:none}}
 #verdict.bad{color:var(--red)} #verdict.top{color:var(--amber)}
@@ -341,7 +342,8 @@ button{touch-action:manipulation}
 #resScore b{font-size:28px;color:var(--cream);font-family:"Shippori Mincho B1",serif}
 #resParts{display:block;font-size:11px;color:var(--mut);margin-top:3px;letter-spacing:.08em}
 #newBest{color:var(--amber);font-size:12px;letter-spacing:.2em;margin-top:2px;display:none}
-#newBest.on{display:block}
+#newBest.on{display:block;animation:bestPulse .55s ease}
+@keyframes bestPulse{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
 #nextBtn,#retryBtn{
   appearance:none;border:0;cursor:pointer;margin-top:16px;
   width:100%;max-width:340px;padding:16px 0;border-radius:16px;
@@ -354,8 +356,9 @@ button{touch-action:manipulation}
   margin-top:12px;padding:11px 0;font-size:16px;color:var(--cream);
   background:var(--wood);box-shadow:none;border:1px solid var(--wood-hi);
 }
-#toHome{appearance:none;border:0;background:transparent;cursor:pointer;margin-top:12px;
+#toHome{appearance:none;border:0;background:transparent;cursor:pointer;margin-top:6px;
   color:var(--mut);font:inherit;font-size:12px;letter-spacing:.2em;
+  padding:12px 20px;   /* 指で押せる高さを確保する */
   text-decoration:underline;text-underline-offset:4px}
 
 #debug{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;display:none;
@@ -391,7 +394,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v1.9 — LV1〜10はイラスト</div>
+    <div id="ver">prototype v2.0 — LV1〜10はイラスト</div>
   </div>
 
   <!-- ゲーム -->
@@ -1788,7 +1791,12 @@ function update(dt){
       } else {
         el.waitBar.classList.remove('on');
       }
-      if(s.Q>0&&!s._vibed){ s._vibed=true; vibe(20); }
+      if(s.Q>0&&!s._vibed){
+        s._vibed=true; vibe(20);
+        // コツのお知らせがグラスの真上に被ったままだと、肝心の縁が見えない。
+        // 注ぎはじめた瞬間に畳む
+        if(noticeT>0.35) noticeT=0.35;
+      }
       if(s.out){
         Input.enabled=false; el.pourBtn.disabled=true;
         s.target=0; s.Q=0; Snd.silence(); Snd.thud(); vibe(60);
@@ -1864,6 +1872,7 @@ function showResult(){
   const res=G.res, R=VERDICT[res.v], n=G.lvl.lv;
   el.clearTag.textContent=`LEVEL ${n} CLEAR`;
   el.clearTag.classList.toggle('on',R.ok);
+  el.result.classList.toggle('ok',R.ok);
   el.verdict.textContent=R.word;
   el.verdict.className=R.cls;
   el.resMeta.innerHTML=`注いだ量 <b>${(res.F*100).toFixed(1)}%</b>　泡 <b>${foamLabel(res.R,G.lvl)}</b>`;
