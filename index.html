@@ -394,7 +394,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v2.1 — LV1〜10はイラスト</div>
+    <div id="ver">prototype v2.2 — LV1〜10はイラスト</div>
   </div>
 
   <!-- ゲーム -->
@@ -665,7 +665,11 @@ const CFG = {
   // 注ぎを止めてからの猶予。実際のビールと同じく「泡が落ち着くのを待って
   // 注ぎ足す」ができる長さにする。この間に再入力すれば同じ注ぎとして続く
   GRACE:1.60, SETTLE:1.85,   // GRACEは既定値。実際はレベルごとに graceOf() で決める
-  FOAM_LO:0.05, FOAM_HI:0.26, FOAM_EXP:1.5, FOAM_EXPANSION:1.6,
+  // FOAM_HIは「全力で注ぎ続けたときに許容上限を振り切る」ように決める。
+  // 0.26では全力でもR=0.26止まりで上限(0.40)に届かず、メーターが飾りだった。
+  // 0.46なら 全力=多すぎ(R0.43) / 半分=下限ぎわ(R0.15) / その間=ちょうど、と
+  // 注ぐ強さがそのまま泡の帯に写る
+  FOAM_LO:0.05, FOAM_HI:0.46, FOAM_EXP:1.5, FOAM_EXPANSION:1.6,
   // 泡は待てば目に見えて崩れ、その多くが液体へ戻る。
   // 泡が多すぎたら手を止めて待つ、が有効な立て直し手段になる
   FOAM_DECAY:0.15, FOAM_RETURN:0.88,
