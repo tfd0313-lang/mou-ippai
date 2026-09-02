@@ -1647,7 +1647,9 @@ function hazardUpdate(dt){
         hz.state='hazard'; hz.t=0;
         el.telemark.classList.remove('on');
         (curPhoto?photoEl:curChara).classList.remove('tele');
-        if(!hz.cfg.safe) setFace('watch');
+        // 写真のキャラは妨害中も「よそ見ポーズ」の画像を出し続ける。
+        // watch(SVG用の目線)へ戻すと素の顔になり、なぜ入らないのか見えない
+        if(!hz.cfg.safe) setFace(curScene?'tele':'watch');
       }
       break;
     }
