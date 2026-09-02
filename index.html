@@ -313,6 +313,8 @@ button{touch-action:manipulation}
 #introLv{color:var(--amber);font-size:14px;letter-spacing:.4em;text-indent:.4em;font-variant-numeric:tabular-nums}
 #introName{font-family:"Shippori Mincho B1",serif;font-weight:800;font-size:40px;letter-spacing:.1em}
 #introPlace{color:var(--mut);font-size:14px;letter-spacing:.2em}
+#introInfo{margin-top:12px;font-size:12px;color:var(--mut);letter-spacing:.12em}
+#introInfo b{color:var(--cream);font-weight:700}
 
 /* ---------- 結果 ---------- */
 #result{
@@ -337,6 +339,7 @@ button{touch-action:manipulation}
 #resMeta b{color:var(--cream)}
 #resScore{margin-top:4px;font-variant-numeric:tabular-nums;font-size:14px;color:var(--mut);text-align:center}
 #resScore b{font-size:28px;color:var(--cream);font-family:"Shippori Mincho B1",serif}
+#resParts{display:block;font-size:11px;color:var(--mut);margin-top:3px;letter-spacing:.08em}
 #newBest{color:var(--amber);font-size:12px;letter-spacing:.2em;margin-top:2px;display:none}
 #newBest.on{display:block}
 #nextBtn,#retryBtn{
@@ -388,7 +391,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v1.7 — LV1〜9はイラスト</div>
+    <div id="ver">prototype v1.8 — LV1〜9はイラスト</div>
   </div>
 
   <!-- ゲーム -->
@@ -418,6 +421,7 @@ button{touch-action:manipulation}
       <div id="introLv"></div>
       <div id="introName"></div>
       <div id="introPlace"></div>
+      <div id="introInfo"></div>
     </div>
     <div id="waitBar" aria-hidden="true"><span>泡が落ち着くのを待てる</span><span class="track"><i></i></span></div>
     <div id="notice"></div>
@@ -680,6 +684,16 @@ const FOAM_ORDERS = {
   // ママLEVEL 1は「指定なし」(別紙§4.1)。泡で減点せず、注ぐ・止めるだけを教える
   any:  {ideal:[0.05,0.45],accept:[0.02,0.55],label:'指定なし'},
 };
+/* レベルごとの実効的な泡の注文。foamTight(1未満)を持つレベルは
+   「ちょうど」の幅が中心に向かって狭くなる。速さだけだと後半の
+   難しさの伸びが感じられないので、泡にも要求を持たせる */
+function foamOrder(lvl){
+  const o=FOAM_ORDERS[(lvl&&lvl.order)||'normal'];
+  const t=(lvl&&lvl.foamTight)||1;
+  if(t>=1) return o;
+  const c=(o.ideal[0]+o.ideal[1])/2, h=(o.ideal[1]-o.ideal[0])/2*t;
+  return {ideal:[c-h,c+h],accept:o.accept,label:o.label};
+}
 
 /* ---------- キャラクター(台詞は複数パターン・直前重複回避) ---------- */
 const CHARS = {
@@ -729,12 +743,12 @@ const CHARS = {
       SPILL:['ちきゅうが、ゆれた','ぼくは わるくない','(真顔でこちらを見る)'],
       OVERFLOW:['うみだ……','グラスが、ちいさい','せかいが あふれてる']}},
   ojiichan:{name:'おじいちゃん', place:'家のダイニング', gender:'m', stars:1, pitch:0.5, rate:0.82,
-    call:'そこそこで、いいよ',
+    call:'なみなみと、頼む',
     lines:{
       PERFECT:['……まだ入る','六十年ぶりの当たりだ','わしの葬式でも注いでくれ'],
-      GREAT:['そこそこと言ったろう','まあ、及第点だ','悪くない。悪くはない'],
+      GREAT:['うむ、いい線だ','あとひと息で満点だったな','悪くない。悪くはない'],
       SAFE:['ぬるいのは嫌いだ','ふむ、そこそこか','昔はもっと入ったんだが'],
-      LOW:['これは“そこ”だな。“そこそこ”ではない','味見は済んだかね','蒸発したんじゃないか'],
+      LOW:['これは味見だ。一杯ではない','注ぐ前に呼んだかね','蒸発したんじゃないか'],
       SPILL:['(こちらの服で拭く)','若いのう','わしの席が飲んだ'],
       OVERFLOW:['戦後を思い出すのう','グラスにも限界があるんじゃ','若いのう']}},
   musume:{name:'娘', place:'家のダイニング', gender:'f', stars:1, pitch:1.7, rate:1.1,
@@ -890,28 +904,28 @@ const LEVELS = [
   {lv:9, ch:'shacho', glass:'pilsner',fillSec:4.6, foamMult:1.0,  order:'normal',
     hazard:{tel:0.55, type:'lower',  mag:36, intake:0.40, trig:[0.87,0.91], name:'スマホ'}},
   // --- 居酒屋のおじさん(★★★★) 中ジョッキ。安全な体揺れの中から予兆を見分ける ---
-  {lv:10, ch:'tonari', glass:'medium', fillSec:5.0, foamMult:1.0, order:'normal',
+  {lv:10, ch:'tonari', glass:'medium', fillSec:5.0, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.6}, hazard:null},
-  {lv:11, ch:'ojisan', glass:'medium', fillSec:4.8, foamMult:1.0, order:'normal',
+  {lv:11, ch:'ojisan', glass:'medium', fillSec:4.8, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.6},
     hazard:{tel:0.55, type:'shift', mag:40, intake:0.35, trig:[0.88,0.92], name:'隣を見る'}},
-  {lv:12, ch:'taisho', glass:'medium', fillSec:4.6, foamMult:1.0, order:'normal',
+  {lv:12, ch:'taisho', glass:'medium', fillSec:4.6, foamMult:1.0, order:'normal', foamTight:0.8,
     sway:{amp:6, period:2.2},
     hazard:{tel:0.50, type:'shiftrot', mag:40, rot:3, intake:0.30, trig:[0.88,0.92], name:'引きながら回転'}},
   // --- 酔っ払い(★★★★★) 大きな演出揺れ。曇りグラスで液面が見にくい ---
-  {lv:13, ch:'yopparai', glass:'small', fillSec:4.8, foamMult:1.05, order:'normal',
+  {lv:13, ch:'yopparai', glass:'small', fillSec:4.8, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24, hazard:null},
-  {lv:14, ch:'tomodachi', glass:'frosted', fillSec:4.5, foamMult:1.05, order:'normal',
+  {lv:14, ch:'tomodachi', glass:'frosted', fillSec:4.5, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24,
     hazard:{tel:0.50, type:'shift', mag:28, intake:0.35, trig:[0.87,0.90], name:'しゃっくり', maxTrig:0.90}},
-  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:4.2, foamMult:1.05, order:'normal',
+  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:4.2, foamMult:1.05, order:'normal', foamTight:0.65,
     sway:{amp:8, period:1.7, rot:2}, decorSway:24, fake:{at:[0.62,0.72], dur:0.45},
     hazard:{tel:0.45, type:'shift', mag:36, intake:0.30, trig:[0.87,0.90], name:'本しゃっくり', maxTrig:0.90}},
   // --- 常連のおじいちゃん(★★★★★★) 通常編最終戦。最も速く、予兆が最短 ---
-  {lv:16, ch:'okami', glass:'thin', fillSec:4.4, foamMult:1.0, order:'normal', hazard:null},
-  {lv:17, ch:'shujin', glass:'thin', fillSec:4.1, foamMult:1.0, order:'normal',
+  {lv:16, ch:'okami', glass:'thin', fillSec:4.4, foamMult:1.0, order:'normal', foamTight:0.5, hazard:null},
+  {lv:17, ch:'shujin', glass:'thin', fillSec:4.1, foamMult:1.0, order:'normal', foamTight:0.5,
     hazard:{tel:0.45, type:'shift', mag:48, intake:0.25, trig:[0.91,0.93], name:'引く'}},
-  {lv:18, ch:'yoitsubure', glass:'thin', fillSec:3.9, foamMult:1.0, order:'normal',
+  {lv:18, ch:'yoitsubure', glass:'thin', fillSec:3.9, foamMult:1.0, order:'normal', foamTight:0.5,
     hazard:{tel:0.40, type:'shiftrot', mag:56, rot:5, intake:0.20, trig:[0.91,0.93], name:'引き＋回転'}},
 ];
 /* 背景は場所ごと。同じ場所に3人が順に登場する */
@@ -1180,8 +1194,8 @@ function effFillRate(s){
   return (s.fHist[s.fHist.length-1]-s.fHist[0])/((s.fHist.length-1)*CFG.TICK);
 }
 /* ---------- 判定 §8.1 ---------- */
-function judge(s,order){
-  const o=FOAM_ORDERS[order||'normal'];
+function judge(s,lvl){
+  const o=foamOrder(lvl);
   const F=(s.L+s.P)/s.C, R=s.P/Math.max(s.L+s.P,1e-9), Wr=s.W/s.C;
   let v;
   if(s.out==='OVERFLOW') v='OVERFLOW';
@@ -1190,10 +1204,12 @@ function judge(s,order){
   else if(F>=CFG.PERFECT_F && Wr<CFG.PERFECT_W && R>=o.ideal[0] && R<=o.ideal[1]) v='PERFECT';
   else if(F>=CFG.GREAT_F && R>=o.accept[0] && R<=o.accept[1]) v='GREAT';
   else v='SAFE';
-  return {v,F,R,Wr,score:score(v,F,R,Wr,o)};
+  const sc=score(v,F,R,Wr,o);
+  return {v,F,R,Wr,score:sc.total,parts:sc.parts};
 }
+/* 点の根拠を出せるよう、内訳(量75点/泡20点/こぼし5点)ごとに丸めてから足す */
 function score(v,F,R,Wr,o){
-  if(v==='OVERFLOW'||v==='SPILL'||v==='LOW') return 0;
+  if(v==='OVERFLOW'||v==='SPILL'||v==='LOW') return {total:0,parts:null};
   const q=100*clamp((F-CFG.MIN_F)/(CFG.PERFECT_F-CFG.MIN_F),0,1);
   let f;
   const [i0,i1]=o.ideal,[a0,a1]=o.accept;
@@ -1201,10 +1217,11 @@ function score(v,F,R,Wr,o){
   else if(R<i0) f=100*clamp((R-a0)/(i0-a0),0,1);
   else f=100*clamp((a1-R)/(a1-i1),0,1);
   const sp=100*clamp(1-Wr/CFG.SPILL_OUT,0,1);
-  return Math.round(q*0.75+f*0.20+sp*0.05);
+  const parts={q:Math.round(q*0.75), f:Math.round(f*0.20), sp:Math.round(sp*0.05)};
+  return {total:parts.q+parts.f+parts.sp, parts};
 }
-function foamLabel(R,order){
-  const o=FOAM_ORDERS[order||'normal'];
+function foamLabel(R,lvl){
+  const o=foamOrder(lvl);
   return R<o.ideal[0]?'少なめ':R>o.ideal[1]?'多め':'ちょうど';
 }
 const VERDICT = {
@@ -1305,7 +1322,7 @@ const el={home:$('home'),game:$('game'),result:$('result'),bubble:$('bubble'),te
   newBest:$('newBest'),nextBtn:$('nextBtn'),retryBtn:$('retryBtn'),toHome:$('toHome'),startBtn:$('startBtn'),
   modeBtnBtn:$('modeBtnBtn'),modeTiltBtn:$('modeTiltBtn'),voiceBtn:$('voiceBtn'),homeBest:$('homeBest'),
   levels:$('levels'),modeHint:$('modeHint'),lvNow:$('lvNow'),lvPrev:$('lvPrev'),lvNext:$('lvNext'),
-  homeBg:$('homeBg'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),
+  homeBg:$('homeBg'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),introInfo:$('introInfo'),
   notice:$('notice'),debug:$('debug'),charaArea:$('charaArea'),
   foamChip:$('foamChip'),foamBar:$('foamBar'),foamWord:$('foamWord'),
   waitBar:$('waitBar'),waitFill:$('waitBar').querySelector('i')};
@@ -1394,24 +1411,25 @@ function bubble(text){
 }
 /* 泡の注文があるレベルだけ、注いでいる間の泡量を見せる(§11.2 泡のルールを教える) */
 function setupFoamChip(){
-  const o=FOAM_ORDERS[G.lvl.order||'normal'];
+  const o=foamOrder(G.lvl);
   el.foamChip.classList.add('on');   // 泡の仕組みを学べるよう全レベルで表示
   const zone=el.foamBar.querySelector('.zone');
-  const a0=o.accept[0],a1=o.accept[1];
-  const pos=r=>clamp((r-a0)/(a1-a0),0,1)*100;
+  // 目盛りは0起点。許容の下限を左端にすると、注ぎはじめは泡が下限に
+  // 届いていないので針が左端に張りついたままになり、壊れて見える
+  const a1=o.accept[1];
+  const pos=r=>clamp(r/a1,0,1)*100;
   zone.style.left=pos(o.ideal[0])+'%';
   zone.style.width=(pos(o.ideal[1])-pos(o.ideal[0]))+'%';
   el.foamBar.querySelector('i').style.left='0%';
   el.foamWord.textContent='—';
   el.foamChip.classList.remove('good','bad');
 }
-function updateFoamChip(R){
+function updateFoamChip(R,trend){
   if(!el.foamChip.classList.contains('on')) return;
-  const o=FOAM_ORDERS[G.lvl.order||'normal'];
-  const a0=o.accept[0],a1=o.accept[1];
-  el.foamBar.querySelector('i').style.left=(clamp((R-a0)/(a1-a0),0,1)*100)+'%';
-  const w=foamLabel(R,G.lvl.order);
-  el.foamWord.textContent=w;
+  const o=foamOrder(G.lvl);
+  el.foamBar.querySelector('i').style.left=(clamp(R/o.accept[1],0,1)*100)+'%';
+  const w=foamLabel(R,G.lvl);
+  el.foamWord.textContent=w+(trend>0?'↑':trend<0?'↓':'');
   el.foamChip.classList.toggle('good',w==='ちょうど');
   el.foamChip.classList.toggle('bad',w!=='ちょうど');
 }
@@ -1482,6 +1500,11 @@ function startLevel(n, retry){
     const st=stageOf(lvl);
     const stName=['','はじめまして','いつもの席','本気の一杯'][st]||'';
     el.introPlace.textContent='★'.repeat(CHARS[lvl.ch].stars)+'　'+CHARS[lvl.ch].place+'　—　'+stName;
+    // 何が難しくなったのかを言葉で見せる。速さと泡の要求は画面から読み取れない
+    const io_=foamOrder(lvl);
+    el.introInfo.innerHTML=
+      `満杯まで <b>${lvl.fillSec}秒</b>　泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
+      (lvl.hazard?`邪魔 <b>${lvl.hazard.name}</b>`:'邪魔 <b>なし</b>');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
   } else {
@@ -1729,7 +1752,15 @@ function update(dt){
       const nf=clamp(s.Q/Qmax,0,1), fill=clamp((s.L+s.P)/s.C,0,1);
       const foamR=s.P/Math.max(s.L+s.P,1e-9);
       Snd.pour(nf,fill,foamR,dt);
-      updateFoamChip(foamR);
+      // メーターの数字は溜まった比率なので、傾きを変えてもすぐには動かない。
+      // 「いまの注ぎ方だと泡がどちらへ向かうか」を矢印で足して、手応えを返す
+      let ftr=0;
+      if(s.Q>0){
+        const fr=clamp(lerp(CFG.FOAM_LO,CFG.FOAM_HI,Math.pow(nf,CFG.FOAM_EXP))*lvl.foamMult,0,0.6);
+        const fi=fr*CFG.FOAM_EXPANSION/((1-fr)+fr*CFG.FOAM_EXPANSION);
+        ftr = fi>foamR+0.015?1 : fi<foamR-0.015?-1 : 0;
+      } else if(s.poured && s.P>0.004*s.C) ftr=-1;   // 待ち中は泡が崩れて減っていく
+      updateFoamChip(foamR,ftr);
       // 手を止めている間は「まだ注ぎ足せる」ことと残り時間を見せる
       if(s.poured && s.Q<=0){
         el.waitBar.classList.add('on');
@@ -1784,7 +1815,7 @@ function update(dt){
 function finishJudge(){
   el.foamChip.classList.remove('on');
   el.waitBar.classList.remove('on');
-  const res=judge(G.sim,G.lvl.order);
+  const res=judge(G.sim,G.lvl);
   G.res=res; G._lineShown=false;
   const R=VERDICT[res.v];
   setFace(R.face);
@@ -1815,8 +1846,12 @@ function showResult(){
   el.clearTag.classList.toggle('on',R.ok);
   el.verdict.textContent=R.word;
   el.verdict.className=R.cls;
-  el.resMeta.innerHTML=`注いだ量 <b>${(res.F*100).toFixed(1)}%</b>　泡 <b>${foamLabel(res.R,G.lvl.order)}</b>`;
-  el.resScore.innerHTML=`スコア <b>${res.score}</b>`;
+  el.resMeta.innerHTML=`注いだ量 <b>${(res.F*100).toFixed(1)}%</b>　泡 <b>${foamLabel(res.R,G.lvl)}</b>`;
+  // 何点がどこから来たかを毎回見せる。量が75点ぶんある=「縁ぎりぎりまで注ぐ
+  // ゲームだ」という説明そのものになる
+  el.resScore.innerHTML = res.parts
+    ? `スコア <b>${res.score}</b><span id="resParts">量 ${res.parts.q}/75　泡 ${res.parts.f}/20　こぼさず ${res.parts.sp}/5</span>`
+    : `スコア <b>0</b><span id="resParts">あふれ・大こぼし・86%未満は0点</span>`;
   el.newBest.classList.toggle('on',!!G._newBest);
   if(R.ok&&n<18){
     el.nextBtn.style.display='';
