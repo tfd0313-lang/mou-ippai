@@ -189,6 +189,9 @@ button{touch-action:manipulation}
 /* 3段階目だけ、立ちのぼる湯気・煙 */
 #smoke{position:absolute;inset:0;pointer-events:none;z-index:2;display:none;opacity:.5}
 #game[data-stage="3"] #smoke{display:block}
+/* EX: 深夜。照明を落として色を抜く */
+#game.ex::after{opacity:1;background:rgba(4,3,8,.42)}
+#game.ex .chara, #game.ex #photoChara{filter:saturate(.82) brightness(.9)}
 #smoke i{position:absolute;bottom:26%;width:70px;height:70px;border-radius:50%;
   background:radial-gradient(circle, rgba(255,240,220,.30), transparent 65%);
   animation:rise2 7s ease-in infinite}
@@ -395,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.3 — 18人そろいました</div>
+    <div id="ver">prototype v3.4 — EX「無理杯」</div>
   </div>
 
   <!-- ゲーム -->
@@ -903,7 +906,7 @@ const GLASSES = {
 /* 別紙仕様書 §3 レベル進行一覧 (LEVEL 1〜9) */
 /* 注ぎをやめてから判定までの猶予。前半はゆっくり泡を待って注ぎ足せるが、
    後半の客はせっかちで、待ってくれない。速さと並ぶ体感の難しさの柱 */
-function graceOf(lvl){ return clamp(2.3-0.08*lvl.lv, 0.9, 2.2); }
+function graceOf(lvl){ if(lvl.ex) return lvl.grace; return clamp(2.3-0.08*lvl.lv, 0.9, 2.2); }
 /* 合格ライン。速さや猶予は数字で見せても体感に残らなかったので、
    「同じ注ぎ方でも上のレベルほど点が辛い」を判定そのものに持たせる。
    LV1は78%で合格・90%でいい一杯、LV18は92%・96.5%。満点の98.5%は共通 */
@@ -957,6 +960,76 @@ const LEVELS = [
   {lv:18, ch:'yoitsubure', glass:'thin', fillSec:3.3, foamMult:1.0, order:'normal', foamTight:0.5,
     hazard:{tel:0.40, type:'shiftrot', mag:56, rot:5, intake:0.20, trig:[0.91,0.93], name:'引き＋回転'}},
 ];
+/* ---------- EX「無理杯」 LEVEL 19〜 (LEVELS.md §7) ----------
+   通常編の18人が強化されて再登場する。終端はないが、表示される各レベルは必ず
+   勝てる。同じレベルは同じパターン(動作の位置・向き・偽予兆)で再挑戦できるよう、
+   乱数はレベル番号から決める */
+const EX_START=19;
+const EX_CHARS=['tonari','yopparai','senpai','ojisan','taisho','shacho','tomodachi','toorisugari',
+                'boss','okami','shujin','yoitsubure','papa','oji','musuko','mama','obaa','ojiichan'];
+function exRng(seed){ let a=(seed*2654435761)>>>0; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+/* EXで解禁する動作。見た目の向きは演出、効くのは取り込み率 */
+const EX_MOVES=[
+  {type:'shift',    name:'二度引き',       mag:44, intake:0.30},
+  {type:'shift',    name:'手を持ち替える', mag:56, intake:0.20},
+  {type:'lower',    name:'乾杯フェイント', mag:36, intake:0.30},
+  {type:'shift',    name:'テーブル接触',   mag:30, intake:0.35},
+  {type:'shiftrot', name:'しゃっくり連発', mag:40, rot:4, intake:0.25},
+];
+const EX_HINTS={
+  A:['予兆(！)が出たら止める。止めれば動作は空振りになる','止めてから0.5秒以内に注ぎ直せば同じ一杯として続く(刻み注ぎ)','前半は押しっぱなし、80%からは短く押す'],
+  B:['合図の直後は注がない','グラスが戻ってから注ぐ','待つのも技術。'],
+  C:['動作は2回来る。1回目をかわしても油断しない','2回目の予兆は短い。80%を超えたら短く押す','予兆のたびに止めて、動作だけ消費させる'],
+  D:['肩だけ動くのは偽物。！が出たときだけ止める','泡が増えやすい。短く押して待つ','速いグラスは最初から短く押す'],
+};
+const exCache={};
+function exLevel(n){
+  if(exCache[n]) return exCache[n];
+  const rnd=exRng(n);
+  const pool=EX_MOVES.slice();
+  const pick=arr=>{ if(arr===EX_MOVES){ if(!pool.length) pool.push(...EX_MOVES); return pool.splice(Math.floor(rnd()*pool.length),1)[0]; } return arr[Math.floor(rnd()*arr.length)]; };
+  const stage = n===20?'B' : n<=21?'A' : n<=24?'C' : n<=29?'D' : 'E';
+  // 30以上は数値を悪化させず、25〜29の帯の組み合わせを変える
+  const band = stage==='E' ? 'D' : stage;
+  const ch = stage==='B' ? 'yopparai' : EX_CHARS[(n-EX_START)%EX_CHARS.length];
+  const base=LEVELS.find(l=>l.ch===ch);
+  const mk=(m,tel,trig,extra)=>Object.assign({},m,{tel,trig,trigFixed:trig[0]+rnd()*(trig[1]-trig[0]),
+    mag:m.mag*(rnd()<0.5?1:-1)},extra||{});
+  let hazards=[], fake=null, fillSec=+(Math.max(3.0,base.fillSec*0.85)).toFixed(1), foamMult=base.foamMult,
+      foamTight=0.6, pulse=false, glassNote='', pull=null, exName='まだいける';
+  if(band==='A'){
+    hazards=[mk(pick(EX_MOVES), n===19?0.40:0.38, [0.86,0.90])];
+  } else if(band==='B'){
+    exName='超酔っ払い'; fillSec=4.0;
+    pull={at:0.30, dur:0.65};                       // 合図直後にグラスを引く固定イベント
+    hazards=[mk(EX_MOVES[4], 0.40, [0.88,0.91])];
+  } else if(band==='C'){
+    exName='かなり無理';
+    const tel2=[0.36,0.34,0.32][Math.min(n-22,2)] || 0.32;
+    hazards=[mk(pick(EX_MOVES),0.40,[0.68,0.76]), mk(pick(EX_MOVES),tel2,[0.88,0.92])];
+    foamTight=0.55;
+  } else { // D / E
+    exName = stage==='E' ? '無理杯' : 'ほぼ無理';
+    const k = stage==='E' ? (n-30)%5 : n-25;         // 0..4 で組み合わせを回す
+    const count = k>=2 ? 3 : 2;
+    const tiny = (k%2===0);                          // 極小(速い)グラス と 巨大ジョッキ を交互に
+    fillSec = tiny ? +(Math.max(2.2,base.fillSec*0.6)).toFixed(1) : 9.0;
+    glassNote = tiny ? '極小グラス' : '巨大ジョッキ';
+    foamMult = +(base.foamMult*1.25).toFixed(2);   // 泡急増 +25%
+    pulse = k>=3;                                    // 流量脈動 ±10%
+    fake={at:[0.55,0.65], atFixed:0.55+rnd()*0.10, dur:0.45};
+    const trigs = count===3 ? [[0.60,0.68],[0.78,0.84],[0.89,0.92]] : [[0.72,0.78],[0.88,0.92]];
+    hazards = trigs.map((t,i)=>mk(pick(EX_MOVES), i===0?0.38:0.34-0.01*i, t, i===count-1?{maxTrig:0.93}:null));
+    foamTight=0.5;
+  }
+  const lvl={lv:n, ch, glass:base.glass, fillSec, foamMult, order:'normal', foamTight,
+    sway: base.sway||{amp:5,period:2.4}, decorSway: base.decorSway||0,
+    hazard:hazards[0]||null, hazards, fake, pull, pulse, ex:true, exName, exStage:band,
+    grace:0.5, glassNote, hints:EX_HINTS[band]};
+  exCache[n]=lvl;
+  return lvl;
+}
+
 /* 背景は場所ごと。同じ場所に3人が順に登場する */
 const BGS = {mama:'dining', obaa:'dining', ojiichan:'dining',
              musuko:'living', papa:'living', oji:'living',
@@ -971,7 +1044,8 @@ const TABLE_COLOR = {dining:'#4A3524', living:'#3A2C20', izakaya:'#271B10',
 const Save = {
   key:'mouippai_v1',
   data:{schemaVersion:2, highestCleared:0, bestByLevel:{}, best:{button:0,tilt:0},
-        totalSuccess:0, totalPerfect:0, voice:true, foamTipSeen:false, swipeTipSeen:false},
+        totalSuccess:0, totalPerfect:0, voice:true, foamTipSeen:false, swipeTipSeen:false,
+        ex:{best:0, streak:0, attempts:{}, fails:{}}},
   load(){ try{
     const raw=localStorage.getItem(this.key); if(!raw) return;
     const d=JSON.parse(raw); if(!d) return;
@@ -981,6 +1055,9 @@ const Save = {
       // 止まるのを防ぐ。形が合わないものは既定値に戻す
       if(!this.data.bestByLevel || typeof this.data.bestByLevel!=='object') this.data.bestByLevel={};
       if(!this.data.best || typeof this.data.best!=='object') this.data.best={button:0,tilt:0};
+      if(!this.data.ex || typeof this.data.ex!=='object') this.data.ex={best:0,streak:0,attempts:{},fails:{}};
+      if(!this.data.ex.attempts) this.data.ex.attempts={};
+      if(!this.data.ex.fails) this.data.ex.fails={};
     }
     else if(d.schemaVersion===1){          // v1移行: 記録類のみ引き継ぐ
       this.data.best=d.best||this.data.best;
@@ -1411,7 +1488,7 @@ function ensureScene(chId){
   return sceneLoading[chId];
 }
 /* 次のレベルを先に取っておく。結果表示中に読み終わるので待ち時間が消える */
-function prefetchScene(n){ const l=LEVELS[clamp(n,1,LEVELS.length)-1]; if(l) ensureScene(l.ch); }
+function prefetchScene(n){ const l=levelOf(n); if(l) ensureScene(l.ch); }
 function setChara(chId){
   const sc=sceneData[chId];
   curScene = sc || null;
@@ -1510,19 +1587,53 @@ const G = {
   hz:null, glassOff:{x:0,y:0,rot:0},
 };
 function setPhase(p){ G.phase=p; G.t=0; }
-function levelOf(n){ return LEVELS[clamp(n,1,LEVELS.length)-1]; }
+function levelOf(n){ n=Math.max(1,Math.round(n)); return n<=LEVELS.length ? LEVELS[n-1] : exLevel(n); }
 
 /* 偽予兆(酔っ払いLV15): 肩だけ動く。グラス当たり判定は動かさない */
 function newFakeState(lvl){
   if(!lvl.fake) return null;
   const [a,b]=lvl.fake.at;
-  return {at:a+Math.random()*(b-a), dur:lvl.fake.dur, state:'idle', t:0};
+  return {at:lvl.fake.atFixed!=null?lvl.fake.atFixed:a+Math.random()*(b-a), dur:lvl.fake.dur, state:'idle', t:0};
+}
+function hazardStateFrom(h){
+  return {cfg:h, state:'idle', t:0,
+    trigF: h.trigFixed!=null ? h.trigFixed : h.trig[0]+Math.random()*(h.trig[1]-h.trig[0])};   // ラウンド開始時に確定 §10.4
 }
 function newHazardState(lvl){
   if(!lvl.hazard) return null;
-  const h=lvl.hazard;
-  return {cfg:h, state:'idle', t:0,
-    trigF: h.trig[0]+Math.random()*(h.trig[1]-h.trig[0])};   // ラウンド開始時に確定 §10.4
+  return hazardStateFrom(lvl.hazard);
+}
+/* EXの2回目以降の動作。1つ目が済んで(空振り含む)から順に控える */
+function newHazardQueue(lvl){
+  if(!lvl.hazards || lvl.hazards.length<2) return [];
+  return lvl.hazards.slice(1).map(hazardStateFrom);
+}
+/* LV20 超酔っ払い: 合図の直後にグラスを引く固定イベント。予兆なし。
+   一度も注いでいなければ何も起きない。引きが戻ってから注ぐのが攻略法 */
+function newPullState(lvl){
+  if(!lvl.pull) return null;
+  return {at:lvl.pull.at, dur:lvl.pull.dur, state:'idle', t:0, pouredBefore:false, waited:false};
+}
+function pullUpdate(dt){
+  const pl=G.pull, s=G.sim;
+  if(!pl||pl.state==='done') return;
+  if(pl.state==='idle'){
+    if(G.t>=pl.at){
+      pl.state='on'; pl.t=0; pl.pouredBefore=s.poured;
+      setFace('tele'); Snd.blip(700,0.06,'sine',0.06);
+    }
+    return;
+  }
+  pl.t+=dt;
+  const MOVE=0.18, BACK=0.20;
+  let frac;
+  if(pl.t<MOVE) frac=smoothstep(pl.t/MOVE);
+  else if(pl.t<pl.dur-BACK) frac=1;
+  else if(pl.t<pl.dur) frac=1-smoothstep((pl.t-(pl.dur-BACK))/BACK);
+  else { frac=0; pl.state='done'; pl.waited=!pl.pouredBefore; setFace('watch'); return; }
+  const sc=CW/390;
+  G.glassOff.x=64*frac*sc;
+  G.curIntake=Math.min(G.curIntake??1, 1-frac);   // 引かれている間はほぼ入らない
 }
 /* 同じ場所の何レベル目かを返す(別紙3.1のレベル差分に使う) */
 function stageOf(lvl){
@@ -1534,8 +1645,8 @@ function startLevel(n, retry){
   const lvl=levelOf(n);
   G.lvl=lvl; G.sim=newSim(GLASSES[lvl.glass].cap);
   G.res=null; G.judged=false; G.retry=!!retry; G.resultShown=false;
-  G.hz=newHazardState(lvl); G.glassOff={x:0,y:0,rot:0};
-  G.fake=newFakeState(lvl);
+  G.hz=newHazardState(lvl); G.hzQueue=newHazardQueue(lvl); G.glassOff={x:0,y:0,rot:0};
+  G.fake=newFakeState(lvl); G.pull=newPullState(lvl); G._exLine=null;
   Input.enabled=false; Input.resetRound();
   el.result.classList.remove('on'); el.telemark.classList.remove('on');
   el.waitBar.classList.remove('on');
@@ -1562,7 +1673,8 @@ function startLevel(n, retry){
   }
   (curPhoto?photoEl:curChara).classList.remove('tele');
   el.game.dataset.bg=BGS[lvl.ch];
-  el.game.dataset.stage=stageOf(lvl);   // 1:通常 2:照明を落とす 3:環境演出を足す
+  el.game.dataset.stage=lvl.ex?3:stageOf(lvl);   // 1:通常 2:照明を落とす 3:環境演出を足す
+  el.game.classList.toggle('ex',!!lvl.ex);
   const bgArt = curScene ? null : ART.bgs[BGS[lvl.ch]];
   el.game.style.backgroundImage = bgArt ? `linear-gradient(180deg,rgba(10,7,4,.15) 0%,rgba(10,7,4,.35) 60%,rgba(10,7,4,.86) 100%), url("${bgArt}")` : '';
   el.game.style.backgroundSize = bgArt ? 'cover' : '';
@@ -1571,22 +1683,32 @@ function startLevel(n, retry){
   updateHud();
   show('game');
   if(!retry){
-    el.introLv.textContent='LEVEL '+lvl.lv;
-    el.introName.textContent=CHARS[lvl.ch].name;
+    el.introLv.textContent=(lvl.ex?'EX ':'')+'LEVEL '+lvl.lv;
+    el.introName.textContent=CHARS[lvl.ch].name+(lvl.ex?'(強化)':'');
     const st=stageOf(lvl);
-    const stName=['','はじめまして','いつもの席','本気の一杯'][st]||'';
+    const stName=lvl.ex ? lvl.exName : (['','はじめまして','いつもの席','本気の一杯'][st]||'');
     el.introPlace.textContent='★'.repeat(CHARS[lvl.ch].stars)+'　'+CHARS[lvl.ch].place+'　—　'+stName;
     // 何が難しくなったのかを言葉で見せる。速さと泡の要求は画面から読み取れない
     const io_=foamOrder(lvl);
+    const hzNames = lvl.hazards ? lvl.hazards.map(h=>h.name).join('・') : (lvl.hazard?lvl.hazard.name:'');
     el.introInfo.innerHTML=
-      `合格 <b>${Math.round(bandOf(lvl).min*100)}%〜</b>　満杯まで <b>${lvl.fillSec}秒</b>　猶予 <b>${graceOf(lvl).toFixed(1)}秒</b><br>`+
+      (lvl.lv===EX_START?'<b>ここから無理杯です</b><br>':'')+
+      `合格 <b>${Math.round(bandOf(lvl).min*100)}%〜</b>　満杯まで <b>${lvl.fillSec}秒</b>${lvl.glassNote?'('+lvl.glassNote+')':''}　猶予 <b>${graceOf(lvl).toFixed(1)}秒</b><br>`+
       `止まるまで <b>${stopLag(lvl)>0?stopLag(lvl).toFixed(2).replace(/0$/,'')+'秒':'すぐ'}</b>　`+
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
-      (lvl.hazard?`邪魔 <b>${lvl.hazard.name}</b>`:'邪魔 <b>なし</b>');
+      (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
+      (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
+      (lvl.pull?'<br><b>固定パターン</b>(同じ動きを繰り返す)':'');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
   } else {
     setPhase('entrance');
+    // EXの段階ヒント: 3・6・10回失敗で1つずつ解放(SPEC §15)
+    if(lvl.ex && lvl.hints){
+      const f=Save.data.ex.fails['L'+lvl.lv]||0;
+      const h = f>=10 ? lvl.hints[2] : f>=6 ? lvl.hints[1] : f>=3 ? lvl.hints[0] : null;
+      if(h) notice('ヒント: '+h, 3.6);
+    }
   }
 }
 function show(name){
@@ -1596,15 +1718,22 @@ function show(name){
 }
 function updateHud(){
   const c=CHARS[G.lvl.ch];
-  el.hud.innerHTML=`LEVEL <b>${G.lvl.lv}</b>　${c.name} <span style="color:#E8A13C">${'★'.repeat(c.stars)}</span>`;
+  el.hud.innerHTML=(G.lvl.ex?'<b>EX</b> ':'')+`LEVEL <b>${G.lvl.lv}</b>　${c.name} <span style="color:#E8A13C">${'★'.repeat(c.stars)}</span>`+(G.lvl.ex?'　無理杯':'');
 }
 let lvBtns=null;      // レベル番号ボタンの実体。作り直さず使い回す
+/* 選べる最大レベル。通常編を抜けたらEXは「最高クリア+1」まで */
+function maxSelectable(){
+  const d=Save.data;
+  if(d.highestCleared<18) return 18;
+  return Math.max(EX_START, (d.ex&&d.ex.best||0)+1);
+}
 function updateHome(){
   const d=Save.data;
   el.homeBest.innerHTML=
     `到達 LEVEL <b>${Math.min(d.highestCleared+1,18)}</b>　`+
     `最高スコア ボタン <b>${d.best.button}</b>／傾け <b>${d.best.tilt}</b><br>`+
-    `PERFECT累計 <b>${d.totalPerfect}</b>`;
+    `PERFECT累計 <b>${d.totalPerfect}</b>`+
+    (d.highestCleared>=18 ? `<br>EX「無理杯」 最高 <b>${d.ex.best>=EX_START?'LEVEL '+d.ex.best:'—'}</b>　連続 <b>${d.ex.streak}</b>` : '');
   // 選び直しただけなら選択の付け替えで済ませる。
   // 以前は毎タップで18個を作り直しており、押した要素ごと消えるため
   // 押した手応えが出ず、反応が遅く感じていた
@@ -1650,16 +1779,19 @@ function refreshLevels(){
     b.classList.toggle('sel', i===G.selLevel);
     b.classList.toggle('clear', i<=Save.data.highestCleared);
   }
-  el.startBtn.textContent=`LEVEL ${G.selLevel} へ`;
+  el.startBtn.textContent=(G.selLevel>18?'EX ':'')+`LEVEL ${G.selLevel} へ`;
 }
 /* 1行のレベル選択。18個を並べると画面が埋まって背景の絵が出せない */
 function updateLvPick(){
-  const n=clamp(G.selLevel,1,LEVELS.length);
+  const n=clamp(G.selLevel,1,maxSelectable());
+  G.selLevel=n;
   const l=levelOf(n), c=CHARS[l.ch];
-  el.lvNow.innerHTML=`LEVEL ${l.lv}<b>${c.name}</b><i>${'★'.repeat(c.stars)}　${c.place}</i>`;
+  el.lvNow.innerHTML = l.ex
+    ? `EX LEVEL ${l.lv}<b>${c.name}(強化)</b><i>無理杯　${l.exName}</i>`
+    : `LEVEL ${l.lv}<b>${c.name}</b><i>${'★'.repeat(c.stars)}　${c.place}</i>`;
   el.lvPrev.disabled = n<=1;
-  el.lvNext.disabled = n>=LEVELS.length;
-  el.startBtn.textContent=`LEVEL ${n} へ`;
+  el.lvNext.disabled = n>=maxSelectable();
+  el.startBtn.textContent=(l.ex?'EX ':'')+`LEVEL ${n} へ`;
 }
 
 /* 攻略動作の更新 §10.5 / 別紙§6 */
@@ -1687,7 +1819,10 @@ function fakeUpdate(dt){
   if(fk.t>=fk.dur){ fk.state='done'; if(G.hz&&G.hz.state==='idle') setFace('watch'); }
 }
 function hazardUpdate(dt){
-  const hz=G.hz, s=G.sim;
+  let hz=G.hz; const s=G.sim;
+  if((!hz||hz.state==='done'||hz.state==='cancelled') && G.hzQueue && G.hzQueue.length){
+    G.hz=hz=G.hzQueue.shift();                            // EX: 次の動作へ
+  }
   if(!hz||hz.state==='done'||hz.state==='cancelled') { G.curIntake=1; return; }
   const F=(s.L+s.P)/s.C;
   hz.t+=dt;
@@ -1699,7 +1834,7 @@ function hazardUpdate(dt){
       const overMax = hz.cfg.maxTrig!=null && F>hz.cfg.maxTrig;  // 例:酔っ払いは90%超で新規開始しない
       const wantStart = overMax ? false : (hz.cfg.safe
         ? F>=hz.trigF                                       // 安全動作は目標充填率のみ
-        : (F>=hz.trigF || pred>=CFG.PERFECT_F) && F>=bandOf(G.lvl).min); // 下限クランプ §10.5
+        : (F>=hz.trigF || pred>=CFG.PERFECT_F) && (G.lvl.ex || F>=bandOf(G.lvl).min)); // 下限クランプ §10.5(EXは60%台から来る)
       if(wantStart){
         hz.state='tel'; hz.t=0;
         if(hz.cfg.safe){
@@ -1831,10 +1966,13 @@ function update(dt){
           notice('傾きセンサーに届かないため、スワイプ操作に切り替えました。画面を左右にドラッグ！',2.8);
         }
       }
-      s.target=Input.flow(Qmax);
+      // EXの流量脈動: ±10%。ストリームの太さと音は同じ値から描くので勝手に同期する
+      const Qrun = lvl.pulse ? Qmax*(1+0.10*Math.sin(performance.now()/1000*Math.PI*2/1.3)) : Qmax;
+      s.target=Input.flow(Qrun);
       fakeUpdate(dt);
       hazardUpdate(dt);
-      simStep(s,dt,{Qmax,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl)});
+      pullUpdate(dt);
+      simStep(s,dt,{Qmax:Qrun,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl)});
       const nf=clamp(s.Q/Qmax,0,1), fill=clamp((s.L+s.P)/s.C,0,1);
       const foamR=s.P/Math.max(s.L+s.P,1e-9);
       Snd.pour(nf,fill,foamR,dt);
@@ -1893,7 +2031,7 @@ function update(dt){
       const R=VERDICT[G.res.v];
       if(!G._lineShown&&G.t>=R.lineDelay){
         G._lineShown=true;
-        const line=pickLine(lvl.ch,G.res.v);
+        const line=G._exLine || pickLine(lvl.ch,G.res.v);
         bubble(line); Voice.speak(line,CHARS[lvl.ch]);
       }
       G.reactionSkippable=G.t>=0.5;
@@ -1917,6 +2055,23 @@ function finishJudge(){
 function applyRecord(res){
   const d=Save.data, ok=VERDICT[res.v].ok, n=G.lvl.lv;
   G._newBest=false;
+  if(G.lvl.ex){
+    const key='L'+n, ex=d.ex;
+    ex.attempts[key]=(ex.attempts[key]||0)+1;
+    if(ok){
+      d.totalSuccess++; if(res.v==='PERFECT') d.totalPerfect++;
+      if(n>ex.best) ex.best=n;
+      ex.streak++;
+      if(!d.bestByLevel[key]||res.score>d.bestByLevel[key]) d.bestByLevel[key]=res.score;
+    } else {
+      ex.streak=0; ex.fails[key]=(ex.fails[key]||0)+1;
+      // LV20 固定イベントは専用の台詞でヒントを出す(LEVELS.md §7.5)
+      if(G.pull && G.pull.pouredBefore){
+        G._exLine = ex.fails[key]>=3 ? '待つのも技術。' : 'いや、早い。';
+      }
+    }
+    Save.save(); return;
+  }
   if(ok){
     d.totalSuccess++;
     if(res.v==='PERFECT') d.totalPerfect++;
@@ -1933,7 +2088,7 @@ function showResult(){
   if(G.resultShown) return;
   G.resultShown=true;
   const res=G.res, R=VERDICT[res.v], n=G.lvl.lv;
-  el.clearTag.textContent=`LEVEL ${n} CLEAR`;
+  el.clearTag.textContent=(G.lvl.ex?'EX ':'')+`LEVEL ${n} CLEAR`+((G.pull&&G.pull.waited&&R.ok)?'　察した':'');
   el.clearTag.classList.toggle('on',R.ok);
   el.result.classList.toggle('ok',R.ok);
   el.verdict.textContent=R.word;
@@ -1945,14 +2100,19 @@ function showResult(){
     ? `スコア <b>${res.score}</b><span id="resParts">量 ${res.parts.q}/75　泡 ${res.parts.f}/20　こぼさず ${res.parts.sp}/5</span>`
     : `スコア <b>0</b><span id="resParts">あふれ・大こぼし・86%未満は0点</span>`;
   el.newBest.classList.toggle('on',!!G._newBest);
+  if(G.lvl.ex){
+    const ex=Save.data.ex, key='L'+n;
+    el.resScore.innerHTML += `<span id="resParts">EX最高 LEVEL ${ex.best||'—'}　連続 ${ex.streak}　このレベル ${ex.attempts[key]||1}回目</span>`;
+  }
   if(R.ok&&n<18){
     el.nextBtn.style.display='';
     el.nextBtn.textContent=`つぎへ　LEVEL ${n+1}`;
     el.retryBtn.classList.add('sub');
   } else if(R.ok&&n>=18){
-    el.nextBtn.style.display='none';
+    el.nextBtn.style.display='';
+    el.nextBtn.textContent=`つぎへ　EX LEVEL ${n+1}`;
     el.retryBtn.classList.add('sub');
-    el.clearTag.textContent='通常編クリア！ ここから先はEX「無理杯」(次回実装)';
+    if(n===18) el.clearTag.textContent='通常編クリア！ ここから先はEX「無理杯」';
   } else {
     el.nextBtn.style.display='none';
     el.retryBtn.classList.remove('sub');
@@ -2513,7 +2673,7 @@ function setTiltLabel(){
     : '押し続けるほど勢いが増し、泡が多くなります';
 }
 el.homeBg.style.backgroundImage=`url("${ART.bgs.title||ART.bgs.izakaya}")`;
-const stepLevel=d=>{ G.selLevel=clamp(G.selLevel+d,1,LEVELS.length); Snd.ui(); refreshLevels(); };
+const stepLevel=d=>{ G.selLevel=clamp(G.selLevel+d,1,maxSelectable()); Snd.ui(); refreshLevels(); };
 el.lvPrev.addEventListener('click',()=>stepLevel(-1));
 el.lvNext.addEventListener('click',()=>stepLevel(1));
 el.modeBtnBtn.addEventListener('click',()=>setMode('button'));
@@ -2578,7 +2738,7 @@ el.startBtn.addEventListener('click',()=>{
     : 'スマホの上端を前へ倒して注ぐ';
   startLevel(G.selLevel,false);
 });
-el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,18); startLevel(G.lvl.lv+1,false); });
+el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,maxSelectable()); startLevel(G.lvl.lv+1,false); });
 el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); });
 el.toHome.addEventListener('click',()=>{
   Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home');
@@ -2591,13 +2751,13 @@ el.toHome.addEventListener('click',()=>{
 const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG) el.debug.classList.add('on');
 const mLv=location.search.match(/[?&]level=(\d+)/);
-if(mLv) G.selLevel=clamp(+mLv[1],1,18);
+if(mLv) G.selLevel=clamp(+mLv[1],1,99);
 else G.selLevel=1;
 
 updateHome();
 requestAnimationFrame(()=>{ resize(); });
 new ResizeObserver(resize).observe(el.cv);
-window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS};
+window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag};
 </script>
 <!-- /APP -->
 </body>
