@@ -161,8 +161,8 @@ button{touch-action:manipulation}
   radial-gradient(44% 18% at 50% 98%, rgba(255,110,25,.30), transparent 70%),
   repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 18px, rgba(255,220,170,.02) 18px 20px),
   linear-gradient(180deg,#1B1409 0%, #241A0C 100%)}
-#game[data-bg="robata"]::after,#game[data-bg="oldrobata"]::after{
-  content:"";position:absolute;left:0;right:0;bottom:0;height:26%;pointer-events:none;
+#game[data-bg="robata"]::before,#game[data-bg="oldrobata"]::before{
+  content:"";position:absolute;left:0;right:0;bottom:0;top:auto;height:26%;pointer-events:none;z-index:0;
   background:radial-gradient(60% 100% at 50% 100%, rgba(255,130,30,.16), transparent 70%);
   animation:ember 3.4s ease-in-out infinite;
 }
@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.4 — EX「無理杯」</div>
+    <div id="ver">prototype v3.5 — EX「無理杯」</div>
   </div>
 
   <!-- ゲーム -->
@@ -936,22 +936,16 @@ const LEVELS = [
   {lv:9, ch:'shacho', glass:'pilsner',fillSec:4.4, foamMult:1.0,  order:'normal',
     hazard:{tel:0.55, type:'lower',  mag:36, intake:0.40, trig:[0.87,0.91], name:'スマホ'}},
   // --- 居酒屋のおじさん(★★★★) 中ジョッキ。安全な体揺れの中から予兆を見分ける ---
-  {lv:10, ch:'tonari', glass:'medium', fillSec:4.5, foamMult:1.0, order:'normal', foamTight:0.8,
-    sway:{amp:6, period:2.6}, hazard:null},
+  {lv:10, ch:'tonari', glass:'medium', fillSec:4.5, foamMult:1.0, order:'normal', foamTight:0.8, hazard:null},
   {lv:11, ch:'ojisan', glass:'medium', fillSec:4.3, foamMult:1.0, order:'normal', foamTight:0.8,
-    sway:{amp:6, period:2.6},
     hazard:{tel:0.55, type:'shift', mag:40, intake:0.35, trig:[0.88,0.92], name:'隣を見る'}},
   {lv:12, ch:'taisho', glass:'medium', fillSec:4.1, foamMult:1.0, order:'normal', foamTight:0.8,
-    sway:{amp:6, period:2.2},
     hazard:{tel:0.50, type:'shiftrot', mag:40, rot:3, intake:0.30, trig:[0.88,0.92], name:'引きながら回転'}},
   // --- 酔っ払い(★★★★★) 大きな演出揺れ。曇りグラスで液面が見にくい ---
-  {lv:13, ch:'yopparai', glass:'small', fillSec:4.2, foamMult:1.05, order:'normal', foamTight:0.65,
-    sway:{amp:8, period:1.7, rot:2}, decorSway:24, hazard:null},
+  {lv:13, ch:'yopparai', glass:'small', fillSec:4.2, foamMult:1.05, order:'normal', foamTight:0.65, hazard:null},
   {lv:14, ch:'tomodachi', glass:'frosted', fillSec:3.9, foamMult:1.05, order:'normal', foamTight:0.65,
-    sway:{amp:8, period:1.7, rot:2}, decorSway:24,
     hazard:{tel:0.50, type:'shift', mag:28, intake:0.35, trig:[0.87,0.90], name:'しゃっくり', maxTrig:0.90}},
-  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:3.7, foamMult:1.05, order:'normal', foamTight:0.65,
-    sway:{amp:8, period:1.7, rot:2}, decorSway:24, fake:{at:[0.62,0.72], dur:0.45},
+  {lv:15, ch:'toorisugari', glass:'frosted', fillSec:3.7, foamMult:1.05, order:'normal', foamTight:0.65, fake:{at:[0.62,0.72], dur:0.45},
     hazard:{tel:0.45, type:'shift', mag:36, intake:0.30, trig:[0.87,0.90], name:'本しゃっくり', maxTrig:0.90}},
   // --- 常連のおじいちゃん(★★★★★★) 通常編最終戦。最も速く、予兆が最短 ---
   {lv:16, ch:'okami', glass:'thin', fillSec:3.8, foamMult:1.0, order:'normal', foamTight:0.5, hazard:null},
@@ -1023,7 +1017,7 @@ function exLevel(n){
     foamTight=0.5;
   }
   const lvl={lv:n, ch, glass:base.glass, fillSec, foamMult, order:'normal', foamTight,
-    sway: base.sway||{amp:5,period:2.4}, decorSway: base.decorSway||0,
+    sway:{amp:26, period:2.8}, decorSway:0,     // 揺れは本物: 瓶を傾きで追わないと入らない
     hazard:hazards[0]||null, hazards, fake, pull, pulse, ex:true, exName, exStage:band,
     grace:0.5, glassNote, hints:EX_HINTS[band]};
   exCache[n]=lvl;
@@ -1374,7 +1368,14 @@ function pickLine(chId,verdict){
 /* ---------- 入力 §5 (センサー不可時はスワイプで傾け) ---------- */
 const Input = {
   mode:'button', enabled:false, btnHeld:false, holdT:0,
-  tilt:{ang:0,b:0,base:null,baseBuf:[],dir:0,pouring:false,lastEvt:0,listening:false,everGot:false},
+  tilt:{ang:0,b:0,g:0,gBase:null,base:null,baseBuf:[],dir:0,pouring:false,lastEvt:0,listening:false,everGot:false},
+  /* 左右の傾き(-1〜1)。EXで揺れるグラスに瓶を合わせる。センサーが無ければ null */
+  side(){
+    const t=this.tilt;
+    if(!t.everGot || performance.now()-t.lastEvt>3000) return null;
+    if(t.gBase==null) t.gBase=t.g;
+    return clamp((t.g-t.gBase)/8, -1, 1);          // ±8度で端まで
+  },
   swipe:{active:false,startX:0,ang:0},
   useSwipe:false,
   flow(Qmax){
@@ -1407,7 +1408,7 @@ const Input = {
     return Qmax*smoothstep(x);
   },
   resetRound(){
-    this.btnHeld=false; this.holdT=0;
+    this.btnHeld=false; this.holdT=0; this.tilt.gBase=null;
     const t=this.tilt; t.base=null; t.baseBuf=[]; t.dir=0; t.pouring=false;
     this.swipe.active=false; this.swipe.ang=0;
     // センサーが後から生きた場合は毎ラウンド傾けへ戻す。
@@ -1421,10 +1422,11 @@ const Input = {
       if(e.beta==null) return;
       t.lastEvt=performance.now();
       const b=e.beta==null?t.b:e.beta;
+      const g=e.gamma==null?(t.g||0):e.gamma;
       // 初回は実測値をそのまま入れる。0から寄せると基準を取る間に
       // 収束途中の値が混ざり、注ぐ向きが逆に固定されることがあった
-      if(!t.everGot){ t.b=b; t.everGot=true; }
-      else t.b += (b-t.b)*0.28;
+      if(!t.everGot){ t.b=b; t.g=g; t.everGot=true; }
+      else { t.b += (b-t.b)*0.28; t.g += (g-t.g)*0.35; }
       t.ang = t.b;
     });
     t.listening=true;
@@ -1698,6 +1700,7 @@ function startLevel(n, retry){
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
       (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
+      (lvl.ex&&lvl.sway?'<br><b>グラスが揺れる</b>: 携帯を左右に傾けて瓶を合わせる':'')+
       (lvl.pull?'<br><b>固定パターン</b>(同じ動きを繰り返す)':'');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
@@ -1799,12 +1802,26 @@ function updateLvPick(){
    (取り込み率100%を保つ) */
 function safeSwayOffset(now){
   const sw=G.lvl.sway;
-  if(!sw) return {x:0,rot:0};
+  if(!sw || !G.lvl.ex) return {x:0,rot:0};
   const sc=CW/390, t=now/1000;
   return {
     x: Math.sin(t*Math.PI*2/sw.period)*sw.amp*sc,
     rot: sw.rot ? Math.sin(t*Math.PI*2/(sw.period*1.3))*sw.rot : 0,
   };
+}
+/* EXの揺れ: グラスは左右に揺れ、瓶は携帯の左右の傾きで合わせる。
+   ずれが許容(±14px)を超えると入らなくなる。センサーが無い端末では自動で追う */
+const SWAY_RANGE=40, SWAY_TOL=14, SWAY_FADE=14;
+function swayTrackUpdate(){
+  const lvl=G.lvl;
+  if(!lvl.ex || !lvl.sway){ G.streamDX=0; return; }
+  const sc=CW/390;
+  const gx=safeSwayOffset(performance.now()).x;
+  const side=Input.side();
+  const sx = side==null ? gx : side*SWAY_RANGE*sc;
+  G.streamDX=sx;
+  const miss=clamp((Math.abs(sx-gx)-SWAY_TOL*sc)/(SWAY_FADE*sc),0,1);
+  G.curIntake=Math.min(G.curIntake??1, 1-miss);
 }
 /* 偽予兆: 予兆マークも出さず、当たり判定も動かさない。肩の動きだけで惑わせる */
 function fakeUpdate(dt){
@@ -1941,6 +1958,13 @@ function update(dt){
         }
         Input.enabled=true;
         el.pourBtn.disabled=false;
+        Input.tilt.gBase = Input.tilt.everGot ? Input.tilt.g : null;
+        if(lvl.ex && lvl.sway && !Save.data.swayTipSeen){
+          Save.data.swayTipSeen=true; Save.save();
+          notice(Input.side()==null
+            ? 'グラスが揺れる。センサーが無いので瓶は自動で追う'
+            : 'グラスが揺れる。携帯を左右に傾けて瓶を合わせる', 3.6);
+        }
         if(!Save.data.foamTipSeen){
           Save.data.foamTipSeen=true; Save.save();
           notice(Input.mode==='button'
@@ -1972,6 +1996,7 @@ function update(dt){
       fakeUpdate(dt);
       hazardUpdate(dt);
       pullUpdate(dt);
+      swayTrackUpdate();
       simStep(s,dt,{Qmax:Qrun,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl)});
       const nf=clamp(s.Q/Qmax,0,1), fill=clamp((s.L+s.P)/s.C,0,1);
       const foamR=s.P/Math.max(s.L+s.P,1e-9);
@@ -2380,9 +2405,11 @@ function renderScene(now){
   const Qmax=s.C/(G.lvl.fillSec*CFG.FILL_FACTOR);
   const nf=clamp(s.Q/Qmax,0,1);
   const gl2=sc.glass;
-  const gcx=(X(gl2.topL)+X(gl2.topR))/2 + sway.x;   // 揺れのみ追従
+  const gcx0=(X(gl2.topL)+X(gl2.topR))/2;
+  const gcx=gcx0 + sway.x;                          // グラス(写真ごと揺れる)
+  const bx=gcx0 + (G.lvl.ex&&G.lvl.sway ? (G.streamDX||0) : sway.x);   // 瓶は傾きで合わせる
   const rimY=topY+my;
-  drawBottle(gcx, rimY, nf, now);
+  drawBottle(bx, rimY, nf, now);
   if(nf>0.02){
     const targetY=Math.min(yL-(yL-yP), yL)+my;
     const missing=1-(G.curIntake??1);
@@ -2390,9 +2417,9 @@ function renderScene(now){
     // 瓶の真下から外れた場所へ落ちる絵になり、動きの理由が読めない。
     // 入っていないことは、液面で弾けるしぶきで見せる
     const landY = Math.max(targetY, rimY+4);
-    const lx = gcx;
+    const lx = bx;
     const sw=2+nf*7;
-    const sp=bottleSpout(gcx, rimY, nf);
+    const sp=bottleSpout(bx, rimY, nf);
     ctx.fillStyle='rgba(240,169,60,0.92)';
     ctx.beginPath();
     ctx.moveTo(sp.x-sw*0.45, sp.y);
@@ -2405,7 +2432,7 @@ function renderScene(now){
       // グラスの外に点が散らばって、描き損じに見える
       ctx.fillStyle='rgba(248,241,225,0.8)';
       ctx.beginPath();
-      ctx.ellipse(gcx, landY, sw*2.2+Math.sin(now/80)*2, 4, 0, 0, Math.PI*2);
+      ctx.ellipse(bx, landY, sw*2.2+Math.sin(now/80)*2, 4, 0, 0, Math.PI*2);
       ctx.fill();
     }
   }
@@ -2731,6 +2758,7 @@ el.startBtn.addEventListener('click',()=>{
     Input.useSwipe = !(Input.tilt.everGot && performance.now()-Input.tilt.lastEvt<2000);
     if(Input.useSwipe && !Input.tilt.listening) Input.requestTilt();   // 許可がまだなら促す
   }
+  if(levelOf(G.selLevel).ex && !Input.tilt.listening) Input.requestTilt();   // EXは横の傾きを使う
   el.pourBtn.style.display=Input.mode==='button'?'':'none';
   el.tiltGuide.hidden=Input.mode!=='tilt';
   el.tiltMsg.textContent=Input.useSwipe
@@ -2738,7 +2766,9 @@ el.startBtn.addEventListener('click',()=>{
     : 'スマホの上端を前へ倒して注ぐ';
   startLevel(G.selLevel,false);
 });
-el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,maxSelectable()); startLevel(G.lvl.lv+1,false); });
+el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,maxSelectable());
+  if(levelOf(G.lvl.lv+1).ex && !Input.tilt.listening) Input.requestTilt();
+  startLevel(G.lvl.lv+1,false); });
 el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); });
 el.toHome.addEventListener('click',()=>{
   Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home');
