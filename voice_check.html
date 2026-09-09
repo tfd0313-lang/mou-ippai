@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>もう一杯！ 声の確認</title>
+<style>body{font-family:system-ui,sans-serif;background:#1b1410;color:#f3e7cf;margin:0;padding:16px}h1{font-size:18px}
+.c{border:1px solid #4a3a2a;border-radius:10px;padding:10px 12px;margin:10px 0;background:#241a12}.c b{display:block;font-size:15px;color:#ffc059}
+.c span{font-size:12px;color:#c9b391}.btns{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+button{appearance:none;border:0;border-radius:8px;background:#e8a13c;color:#221503;padding:8px 10px;font-size:13px}
+button.sub{background:#5a4530;color:#f3e7cf}p{font-size:12px;color:#c9b391;line-height:1.7}</style></head><body>
+<h1>声の確認（VOICEVOX 割り当て）</h1>
+<p>ボタンで台詞を再生します。合わない人物があれば「LV5 パパは低すぎ」「大将はもっと荒く」のように言ってください。
+話者名は tools/make_voice.py の表のとおり。声: VOICEVOX（各話者名はクレジット表記）</p>
+<div class="c" data-id="mama"><b>LV1 ママ</b><span>もち子さん／ノーマル　速さ1.05　高さ0.00　抑揚1.1</span><div class="btns"></div></div><div class="c" data-id="obaa"><b>LV2 おばあちゃん</b><span>後鬼／人間ver.　速さ0.85　高さ-0.04　抑揚0.9</span><div class="btns"></div></div><div class="c" data-id="ojiichan"><b>LV3 おじいちゃん</b><span>ちび式じい／ノーマル　速さ0.85　高さ0.00　抑揚1.0</span><div class="btns"></div></div><div class="c" data-id="musuko"><b>LV4 息子</b><span>白上虎太郎／ふつう　速さ1.08　高さ0.00　抑揚1.1</span><div class="btns"></div></div><div class="c" data-id="papa"><b>LV5 パパ</b><span>玄野武宏／ノーマル　速さ0.95　高さ-0.03　抑揚0.9</span><div class="btns"></div></div><div class="c" data-id="oji"><b>LV6 おじさん</b><span>玄野武宏／喜び　速さ1.02　高さ0.02　抑揚1.2</span><div class="btns"></div></div><div class="c" data-id="senpai"><b>LV7 先輩</b><span>青山龍星／ノーマル　速さ1.05　高さ0.00　抑揚1.1</span><div class="btns"></div></div><div class="c" data-id="boss"><b>LV8 上司</b><span>雀松朱司／ノーマル　速さ0.95　高さ-0.02　抑揚0.9</span><div class="btns"></div></div><div class="c" data-id="shacho"><b>LV9 社長</b><span>麒ヶ島宗麟／ノーマル　速さ0.90　高さ-0.03　抑揚1.0</span><div class="btns"></div></div><div class="c" data-id="tonari"><b>LV10 隣の客</b><span>剣崎雌雄／ノーマル　速さ1.05　高さ0.00　抑揚1.2</span><div class="btns"></div></div><div class="c" data-id="ojisan"><b>LV11 居酒屋のおじさん</b><span>玄野武宏／ツンギレ　速さ1.00　高さ-0.05　抑揚1.2</span><div class="btns"></div></div><div class="c" data-id="taisho"><b>LV12 大将</b><span>青山龍星／熱血　速さ1.00　高さ-0.04　抑揚1.2</span><div class="btns"></div></div><div class="c" data-id="yopparai"><b>LV13 酔っ払い</b><span>白上虎太郎／びえーん　速さ0.85　高さ-0.02　抑揚1.3</span><div class="btns"></div></div><div class="c" data-id="tomodachi"><b>LV14 酔っ払いの友達</b><span>満別花丸／ノーマル　速さ0.95　高さ0.00　抑揚1.1</span><div class="btns"></div></div><div class="c" data-id="toorisugari"><b>LV15 通りすがり</b><span>栗田まろん／ノーマル　速さ1.05　高さ0.00　抑揚1.0</span><div class="btns"></div></div><div class="c" data-id="okami"><b>LV16 女将</b><span>冥鳴ひまり／ノーマル　速さ0.92　高さ-0.02　抑揚1.0</span><div class="btns"></div></div><div class="c" data-id="shujin"><b>LV17 無口な店主</b><span>麒ヶ島宗麟／ノーマル　速さ0.80　高さ-0.08　抑揚0.7</span><div class="btns"></div></div><div class="c" data-id="yoitsubure"><b>LV18 酔い潰れたおじさん</b><span>玄野武宏／悲しみ　速さ0.72　高さ-0.10　抑揚0.6</span><div class="btns"></div></div>
+<script>
+const ctx=new (window.AudioContext||window.webkitAudioContext)(); let cur=null;
+fetch('voice/manifest.json').then(r=>r.json()).then(m=>{
+  document.querySelectorAll('.c').forEach(c=>{
+    const id=c.dataset.id, lines=m[id]||{}; const keys=Object.keys(lines); const box=c.querySelector('.btns');
+    if(!keys.length){ box.textContent='（収録なし）'; return; }
+    const pick=[keys[0], ...keys.slice(1).filter((_,i)=>i%6===0).slice(0,5)];
+    pick.forEach((t,i)=>{ const b=document.createElement('button'); if(i) b.className='sub'; b.textContent=(i?'':'呼びかけ: ')+t;
+      b.onclick=async()=>{ ctx.resume(); if(cur){try{cur.stop();}catch(e){}}
+        const ab=await (await fetch('voice/'+id+'/'+lines[t].f)).arrayBuffer(); const buf=await ctx.decodeAudioData(ab);
+        const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); src.start(); cur=src; };
+      box.appendChild(b); });
+  });
+});
+</script></body></html>

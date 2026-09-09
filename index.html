@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.10 — 声つき</div>
+    <div id="ver">prototype v3.11 — 声つき</div>
   </div>
 
   <!-- ゲーム -->
@@ -1772,7 +1772,7 @@ function startLevel(n, retry){
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
       (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
-      (lvl.ex&&lvl.sway&&lvl.swayScale?'<br><b>グラスが揺れ、手も震える</b>: 携帯を左右に傾けて瓶を合わせる':'')+
+      (lvl.ex&&lvl.sway&&lvl.swayScale?'<br><b>グラスが揺れ、手も震える</b>: 携帯を左右に傾けて瓶を合わせる<br><span style="font-size:11px">iPhoneは「動作と方向のアクセス」の許可が要る(断ると瓶は自動で追う)</span>':'')+
       (lvl.pull?'<br><b>固定パターン</b>(同じ動きを繰り返す)':'');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
@@ -1951,7 +1951,7 @@ function hazardUpdate(dt){
     }
     case 'tel':{
       G.curIntake=1;                                        // 予兆中は判定を動かさない
-      if(s.Q<=0 && !hz.cfg.safe){                           // 予兆中に止めた→キャンセル
+      if(s.target<=0 && !hz.cfg.safe){                      // 予兆中に手を離した→キャンセル(垂れ中でも)
         hz.state='cancelled';
         el.telemark.classList.remove('on');
         (curPhoto?photoEl:curChara).classList.remove('tele');
@@ -2129,7 +2129,7 @@ function update(dt){
       hazardUpdate(dt);
       simStep(s,dt,{Qmax,foamMult:lvl.foamMult,intake:1,lag:stopLag(lvl)});
       Snd.settleFizz(s.P/Math.max(s.L+s.P,1e-9),dt);
-      if(s.zeroT>=CFG.SETTLE) finishJudge();
+      if(s.zeroT>=CFG.SETTLE && G.t>=0.5) finishJudge();
       break;
     }
     case 'ovfShow':{
