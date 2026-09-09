@@ -203,8 +203,8 @@ button{touch-action:manipulation}
                  100%{transform:translateY(-190px) scale(1.5);opacity:0}}
 /* シーンモード: Gemini画像の人物+グラスがそのまま舞台になる */
 #game.scene #charaArea{flex:0 0 0;min-height:0}
-#game.scene #bubble{top:14px;right:6%}
-#game.scene #telemark{top:42%;bottom:auto;right:14%}
+#game.scene #bubble{top:calc(env(safe-area-inset-top,0px) + 14px);right:6%}
+#game.scene #telemark{top:40vh;bottom:auto;right:14%}
 #charaArea{flex:0 0 24%;position:relative;display:flex;align-items:flex-end;justify-content:center}
 #charaArea.has-photo{flex:0 0 30%}
 /* Gemini生成の人物。表情はbackground-imageの差し替えで切り替える */
@@ -273,7 +273,7 @@ button{touch-action:manipulation}
 }
 #hud b{color:var(--amber);font-weight:700}
 #cv{flex:1 1 auto;min-height:0;width:100%;display:block}
-#controls{flex:0 0 23%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+#controls{flex:0 0 23%;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;z-index:2;
   gap:8px;padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 14px)}
 #pourBtn{
   appearance:none;border:0;cursor:pointer;touch-action:none;
@@ -375,7 +375,7 @@ button{touch-action:manipulation}
   font-size:13px;letter-spacing:.04em;padding:10px 16px;border-radius:10px;line-height:1.6;
   opacity:0;pointer-events:none;transition:opacity .2s;max-width:86%;text-align:center;z-index:8}
 #notice.on{opacity:1}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important;transition-duration:.001s!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.001s!important}}
 </style>
 
 <div id="stage">
@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.9 — 声つき</div>
+    <div id="ver">prototype v3.10 — 声つき</div>
   </div>
 
   <!-- ゲーム -->
@@ -1109,7 +1109,7 @@ const Snd = {
       loopNoise().connect(this.fCav).connect(this.gCav).connect(this.master);
     }catch(e){}
   },
-  resume(){ if(this.ctx&&this.ctx.state==='suspended') this.ctx.resume(); },
+  resume(){ if(this.ctx&&this.ctx.state!=='running'){ try{ this.ctx.resume().catch(()=>{}); }catch(e){} } },
 
   /* 瓶口から空気が入る「ゴボッ」。連続ノイズではなく離散パルスで鳴らす */
   glug(nf){
@@ -1542,14 +1542,15 @@ function ensureScene(chId){
     .then(r=>r.ok?r.json():null)
     .then(d=>{
       if(!d){ sceneFailed[chId]=true; delete sceneLoading[chId]; return; }
-      sceneFailed[chId]=false;
-      sceneData[chId]=d;
-      // 画像の実体化まで待つ。待たずに描画へ入ると舞台が真っ暗になる
-      sceneImgs[chId]={};
+      // 画像の実体化まで待ってから公開する。JSONを読んだ時点で公開すると
+      // 導入直後の数フレームが真っ暗になる。壊れた表情は外して素の顔に落とす
+      const imgs={};
       return Promise.all(Object.keys(d.imgs).map(k=>new Promise(res=>{
-        const im=new Image(); im.onload=im.onerror=()=>res(); im.src=d.imgs[k];
-        sceneImgs[chId][k]=im;
-      })));
+        const im=new Image();
+        im.onload=()=>res();
+        im.onerror=()=>{ delete d.imgs[k]; delete imgs[k]; res(); };
+        im.src=d.imgs[k]; imgs[k]=im;
+      }))).then(()=>{ sceneImgs[chId]=imgs; sceneData[chId]=d; sceneFailed[chId]=false; });
     })
     .catch(()=>{ sceneFailed[chId]=true; delete sceneLoading[chId]; });
     // 失敗してもSVGのキャラで遊べる。次にこのキャラへ入ったとき取り直す
@@ -1709,6 +1710,13 @@ function stageOf(lvl){
   const same=LEVELS.filter(l=>BGS[l.ch]===bg).map(l=>l.lv).sort((a,b)=>a-b);
   return same.indexOf(lvl.lv)+1;   // 1,2,3
 }
+/* 絵が無いときだけ写真背景を敷く。絵が後から届いたときにも呼んで消す */
+function applyGameBg(lvl){
+  const bgArt = curScene ? null : ART.bgs[BGS[lvl.ch]];
+  el.game.style.backgroundImage = bgArt ? `linear-gradient(180deg,rgba(10,7,4,.15) 0%,rgba(10,7,4,.35) 60%,rgba(10,7,4,.86) 100%), url("${bgArt}")` : '';
+  el.game.style.backgroundSize = bgArt ? 'cover' : '';
+  el.game.style.backgroundPosition = bgArt ? 'center 30%' : '';
+}
 function startLevel(n, retry){
   VoiceClips.load();
   const lvl=levelOf(n);
@@ -1744,10 +1752,7 @@ function startLevel(n, retry){
   el.game.dataset.bg=BGS[lvl.ch];
   el.game.dataset.stage=lvl.ex?3:stageOf(lvl);   // 1:通常 2:照明を落とす 3:環境演出を足す
   el.game.classList.toggle('ex',!!lvl.ex);
-  const bgArt = curScene ? null : ART.bgs[BGS[lvl.ch]];
-  el.game.style.backgroundImage = bgArt ? `linear-gradient(180deg,rgba(10,7,4,.15) 0%,rgba(10,7,4,.35) 60%,rgba(10,7,4,.86) 100%), url("${bgArt}")` : '';
-  el.game.style.backgroundSize = bgArt ? 'cover' : '';
-  el.game.style.backgroundPosition = bgArt ? 'center 30%' : '';
+  applyGameBg(lvl);
   setupFoamChip();
   updateHud();
   show('game');
@@ -1995,7 +2000,7 @@ function update(dt){
       // 間に合わなければSVGのキャラのまま進める
       const ready = !SCENE_IDS.includes(lvl.ch) || sceneData[lvl.ch] || sceneFailed[lvl.ch] || G.t>=5;
       if(G.t>=0.8 && ready){
-        if(sceneData[lvl.ch] && !curScene){ setChara(lvl.ch); setFace('neutral'); }
+        if(sceneData[lvl.ch] && !curScene){ setChara(lvl.ch); setFace('neutral'); applyGameBg(lvl); }
         else if(scenePending){
           // 5秒待っても届かなかった。真っ暗のままでは遊べないので、
           // ここだけは仮のSVGキャラを出して先へ進める
@@ -2278,10 +2283,9 @@ function drawBottle(gcx, rimY, nf, now){
   ctx.rotate(Math.PI/2);                // 画像の左右方向(口→底)を瓶の軸に合わせる
   // 舞台に落ち影を入れて浮かないようにする
   ctx.save();
-  ctx.globalAlpha=.32; ctx.filter='blur(6px)';
-  ctx.drawImage(im, -d.mouth[0]*k+6*sc, -d.mouth[1]*k+8*sc, d.w*k, d.h*k);
-  ctx.restore();
+  ctx.shadowColor='rgba(0,0,0,.34)'; ctx.shadowBlur=6*sc; ctx.shadowOffsetX=6*sc; ctx.shadowOffsetY=8*sc;
   ctx.drawImage(im, -d.mouth[0]*k, -d.mouth[1]*k, d.w*k, d.h*k);
+  ctx.restore();
   ctx.restore();
 }
 /* センサーが生きているか、いま何度かを画面に出す。
