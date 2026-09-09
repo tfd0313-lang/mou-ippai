@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.11 — 声つき</div>
+    <div id="ver">prototype v3.12 — 声つき</div>
   </div>
 
   <!-- ゲーム -->
@@ -1019,7 +1019,7 @@ function exLevel(n){
   }
   const lvl={lv:n, ch, glass:base.glass, fillSec, foamMult, order:'normal', foamTight,
     // 揺れは本物(瓶を傾きで追わないと入らない)。19・20は無し、21から段階的に
-    sway:{period:2.8}, swayScale: n<=20?0 : n===21?0.6 : n<=24?0.8 : 1.0, decorSway:0,
+    sway:{period:2.8}, swayScale: n<=20?0.35 : n===21?0.6 : n<=24?0.8 : 1.0, decorSway:0,
     hazard:hazards[0]||null, hazards, fake, pull, pulse, ex:true, exName, exStage:band,
     grace: band==='A'||band==='B' ? 0.7 : band==='C' ? 0.6 : 0.5,
     glassNote, hints:EX_HINTS[band]};
@@ -1310,7 +1310,7 @@ const Voice = {
       const pool=(c.gender==='f')?(this.females||[]):(this.males||[]);
       const idx=Object.keys(CHARS).indexOf(c.id);
       const v=pool.length ? pool[Math.max(0,idx)%pool.length] : ((c.gender==='f')?this.female:this.male);
-      const spoken=text.replace(/[（(][^)）]*[)）]/g,'').replace(/…/g,'').replace(/[ｚz]{2,}/g,'').trim();
+      const spoken=text.replace(/[（(][^)）]*[)）]/g,'').replace(/…/g,'').replace(/[ｚz]{2,}/g,'').replace(/の分/g,'のぶん').trim();
       if(!spoken){ this._done=true; return; }               // ト書きだけの台詞は声を出さない
       const u=new SpeechSynthesisUtterance(spoken);
       u.lang='ja-JP'; if(v) u.voice=v;
@@ -1460,14 +1460,14 @@ const Input = {
       if(t.base===null) return 0;
       const d=t.ang-t.base;
       if(t.dir===0){ if(Math.abs(d)>CFG.TILT.DIR) t.dir=Math.sign(d); }
-      else if(d*t.dir < -CFG.TILT.DIR && !t.pouring) t.dir=Math.sign(d);
+      else if(d*t.dir < -CFG.TILT.DIR && !t.pouring && !t.pouredOnce) t.dir=Math.sign(d);
       if(t.dir===0) return 0;
-      a=d*t.dir;
+      a=Math.max(0, d*t.dir);                        // 反対側へ戻し過ぎても注がない
     }
     const st=this.mode==='tilt'?this.tilt:null;
     if(st){
       if(st.pouring){ if(a<CFG.TILT.STOP) st.pouring=false; }
-      else { if(a>=CFG.TILT.START) st.pouring=true; }
+      else { if(a>=CFG.TILT.START){ st.pouring=true; st.pouredOnce=true; } }
       if(!st.pouring) return 0;
     }
     const x=clamp((a-CFG.TILT.START)/(CFG.TILT.MAX-CFG.TILT.START),0,1);
@@ -1475,7 +1475,7 @@ const Input = {
   },
   resetRound(){
     this.btnHeld=false; this.holdT=0; this.tilt.gBase=null;
-    const t=this.tilt; t.base=null; t.baseBuf=[]; t.dir=0; t.pouring=false;
+    const t=this.tilt; t.base=null; t.baseBuf=[]; t.dir=0; t.pouring=false; t.pouredOnce=false;
     this.swipe.active=false; this.swipe.ang=0;
     // センサーが後から生きた場合は毎ラウンド傾けへ戻す。
     // 以前は useSwipe が立ちっぱなしで、再読み込みするまで傾けが復活しなかった
