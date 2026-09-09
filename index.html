@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.8 — EX「無理杯」</div>
+    <div id="ver">prototype v3.9 — 声つき</div>
   </div>
 
   <!-- ゲーム -->
@@ -1055,6 +1055,11 @@ const Save = {
       if(!this.data.ex || typeof this.data.ex!=='object') this.data.ex={best:0,streak:0,attempts:{},fails:{}};
       if(!this.data.ex.attempts) this.data.ex.attempts={};
       if(!this.data.ex.fails) this.data.ex.fails={};
+      if(typeof this.data.ex.best!=='number') this.data.ex.best=0;
+      if(typeof this.data.ex.streak!=='number') this.data.ex.streak=0;
+      for(const k of ['highestCleared','totalSuccess','totalPerfect']) if(typeof this.data[k]!=='number'||isNaN(this.data[k])) this.data[k]=0;
+      if(typeof this.data.best.button!=='number') this.data.best.button=0;
+      if(typeof this.data.best.tilt!=='number') this.data.best.tilt=0;
     }
     else if(d.schemaVersion===1){          // v1移行: 記録類のみ引き継ぐ
       this.data.best=d.best||this.data.best;
@@ -1226,15 +1231,22 @@ const VoiceClips = {
   get(chId,text){ const m=this.map&&this.map[chId]; return m ? m[text] : null; },
   /* 音の再生は Snd と同じ AudioContext を使う(最初のタップで起きている)。
      <audio> はiOSで操作外の再生を止められることがある */
-  play(chId,clip,onend){
+  _id:0,
+  play(chId,clip,onend,onfail){
     this.stop();
+    const id=++this._id;
     const url='voice/'+chId+'/'+clip.f;
     const ctx=Snd.ctx;
-    if(!ctx){ const a=new Audio(url); this.cur=a; a.onended=a.onerror=()=>{ if(this.cur===a) this.cur=null; onend(); }; a.play().catch(()=>onend()); return; }
-    const start=buf=>{ const src=ctx.createBufferSource(); src.buffer=buf; src.connect(Snd.master||ctx.destination);
-      this.cur=src; src.onended=()=>{ if(this.cur===src) this.cur=null; onend(); }; src.start(); };
+    const fail=()=>{ if(id===this._id){ this.cur=null; (onfail||onend)(); } };
+    if(!ctx){ const a=new Audio(url); this.cur=a;
+      a.onended=()=>{ if(this.cur===a){ this.cur=null; onend(); } }; a.onerror=fail;
+      a.play().catch(fail); return; }
+    const start=buf=>{ if(id!==this._id) return;             // 止められた後に届いた分は流さない
+      const src=ctx.createBufferSource(); src.buffer=buf; src.connect(Snd.master||ctx.destination);
+      this.cur=src; src.onended=()=>{ if(this.cur===src){ this.cur=null; onend(); } }; src.start(); };
     if(this.bufs[url]){ start(this.bufs[url]); return; }
-    fetch(url).then(r=>r.arrayBuffer()).then(ab=>ctx.decodeAudioData(ab)).then(buf=>{ this.bufs[url]=buf; start(buf); }).catch(()=>onend());
+    fetch(url).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(ab=>ctx.decodeAudioData(ab))
+      .then(buf=>{ this.bufs[url]=buf; start(buf); }).catch(fail);   // 読めない形式の端末は読み上げへ
   },
   stop(){ const c=this.cur; this.cur=null; if(!c) return; try{ c.stop ? c.stop() : c.pause(); }catch(e){} },
   prefetch(chId){ const m=this.map&&this.map[chId]; if(!m) return; Object.values(m).slice(0,12).forEach(c=>{ const url='voice/'+chId+'/'+c.f; if(!this.bufs[url]&&Snd.ctx) fetch(url).then(r=>r.arrayBuffer()).then(ab=>Snd.ctx.decodeAudioData(ab)).then(b=>{this.bufs[url]=b;}).catch(()=>{}); }); },
@@ -1270,19 +1282,26 @@ const Voice = {
      間があり、onstart / onend を返さない端末もあるので、時間でも必ず打ち切る */
   _endBy:0, _done:true,
   active(){ return !this._done && performance.now() < this._endBy; },
+  _gen:0,
   speak(text,ch){
     this._done=true; this._endBy=0;
     VoiceClips.stop();
     if(!Save.data.voice) return;
+    const gen=++this._gen;                          // 古い声の終了通知で新しい字幕を消さない
+    const done=()=>{ if(gen===this._gen) this._done=true; };
     // 収録済みの声があればそれを流す
     const chId=(ch||CHARS.papa).id;
     const clip=VoiceClips.get(chId,text);
-    if(clip){
+    if(clip && !this._clipBroken){
       try{ speechSynthesis.cancel(); }catch(e){}
       this._endBy=performance.now()+((clip.d||2.0)*1000+400); this._done=false;
-      VoiceClips.play(chId,clip,()=>{ this._done=true; });
+      VoiceClips.play(chId,clip,done,()=>{ if(gen!==this._gen) return; this._clipBroken=true; this._tts(text,ch,gen); });
       return;
     }
+    this._tts(text,ch,gen);
+  },
+  _tts(text,ch,gen){
+    const done=()=>{ if(gen===this._gen) this._done=true; };
     try{
       if(!('speechSynthesis' in window)) return;
       if(!this.any) this.pick();
@@ -1306,7 +1325,7 @@ const Voice = {
       const est = 700 + text.length*170/Math.max(c.rate,0.5);
       this._endBy = performance.now() + 1200 + est;
       this._done = false;
-      u.onend = u.onerror = ()=>{ this._done=true; };
+      u.onend = u.onerror = done;
       // 直前の読み上げを止めた直後に speak すると、端末によっては
       // 新しいほうが捨てられる。少し待ってから流す
       const wasSpeaking = speechSynthesis.speaking || speechSynthesis.pending;
@@ -1691,6 +1710,7 @@ function stageOf(lvl){
   return same.indexOf(lvl.lv)+1;   // 1,2,3
 }
 function startLevel(n, retry){
+  VoiceClips.load();
   const lvl=levelOf(n);
   G.lvl=lvl; G.sim=newSim(GLASSES[lvl.glass].cap);
   G.res=null; G.judged=false; G.retry=!!retry; G.resultShown=false;
@@ -2130,7 +2150,7 @@ function finishJudge(){
   el.foamChip.classList.remove('on');
   el.waitBar.classList.remove('on');
   const res=judge(G.sim,G.lvl);
-  G.res=res; G._lineShown=false;
+  G.res=res; G._lineShown=false; G.reactionSkippable=false;
   const R=VERDICT[res.v];
   setFace(R.face);
   if(R.snd==='perfect'){ Snd.perfect(); vibe([25,60,25]); }
@@ -2151,7 +2171,7 @@ function applyRecord(res){
     } else {
       ex.streak=0; ex.fails[key]=(ex.fails[key]||0)+1;
       // LV20 固定イベントは専用の台詞でヒントを出す(LEVELS.md §7.5)
-      if(G.pull && G.pull.pouredBefore){
+      if(G.pull && G.pull.pouredBefore && res.v==='SPILL'){
         G._exLine = ex.fails[key]>=3 ? '待つのも技術。' : 'いや、早い。';
       }
     }
@@ -2183,7 +2203,7 @@ function showResult(){
   // ゲームだ」という説明そのものになる
   el.resScore.innerHTML = res.parts
     ? `スコア <b>${res.score}</b><span id="resParts">量 ${res.parts.q}/75　泡 ${res.parts.f}/20　こぼさず ${res.parts.sp}/5</span>`
-    : `スコア <b>0</b><span id="resParts">あふれ・大こぼし・86%未満は0点</span>`;
+    : `スコア <b>0</b><span id="resParts">あふれ・大こぼし・${Math.round(bandOf(G.lvl).min*100)}%未満は0点</span>`;
   el.newBest.classList.toggle('on',!!G._newBest);
   if(G.lvl.ex){
     const ex=Save.data.ex, key='L'+n;
@@ -2787,6 +2807,7 @@ function syncVoiceBtn(){
 el.voiceBtn.addEventListener('click',()=>{
   Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
   if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
+  else { VoiceClips.stop(); try{speechSynthesis.cancel();}catch(e){} Voice._done=true; }
 });
 // ブラウザによる位置の復元を止める(再訪時にレベル一覧から始まってしまう)
 try{ if('scrollRestoration' in history) history.scrollRestoration='manual'; }catch(e){}
@@ -2833,6 +2854,7 @@ el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv
 el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); });
 el.toHome.addEventListener('click',()=>{
   Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home');
+  VoiceClips.stop(); try{speechSynthesis.cancel();}catch(e){} Voice._done=true;
   // 最初に選ばれているのは常にLEVEL 1。続きの番号を出すと、はじめて開いた人が
   // いきなり社長(LV9)から始めることになる。続きは番号を選び直せばよい
   G.selLevel=1;
