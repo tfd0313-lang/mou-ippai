@@ -398,7 +398,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.7 — EX「無理杯」</div>
+    <div id="ver">prototype v3.8 — EX「無理杯」</div>
   </div>
 
   <!-- ゲーム -->
@@ -992,7 +992,8 @@ function exLevel(n){
   let hazards=[], fake=null, fillSec=+(Math.max(3.0,base.fillSec*0.85)).toFixed(1), foamMult=base.foamMult,
       foamTight=0.6, pulse=false, glassNote='', pull=null, exName='まだいける';
   if(band==='A'){
-    hazards=[mk(pick(EX_MOVES), n===19?0.40:0.38, [0.86,0.90])];
+    fillSec=+(Math.max(3.0,base.fillSec*0.9)).toFixed(1);
+    hazards=[mk(pick(EX_MOVES), n===19?0.45:0.42, [0.86,0.90])];
   } else if(band==='B'){
     exName='超酔っ払い'; fillSec=4.0;
     pull={at:0.30, dur:0.65};                       // 合図直後にグラスを引く固定イベント
@@ -1017,9 +1018,11 @@ function exLevel(n){
     foamTight=0.5;
   }
   const lvl={lv:n, ch, glass:base.glass, fillSec, foamMult, order:'normal', foamTight,
-    sway:{amp:26, period:2.8}, decorSway:0,     // 揺れは本物: 瓶を傾きで追わないと入らない
+    // 揺れは本物(瓶を傾きで追わないと入らない)。19・20は無し、21から段階的に
+    sway:{period:2.8}, swayScale: n<=20?0 : n===21?0.6 : n<=24?0.8 : 1.0, decorSway:0,
     hazard:hazards[0]||null, hazards, fake, pull, pulse, ex:true, exName, exStage:band,
-    grace:0.5, glassNote, hints:EX_HINTS[band]};
+    grace: band==='A'||band==='B' ? 0.7 : band==='C' ? 0.6 : 0.5,
+    glassNote, hints:EX_HINTS[band]};
   exCache[n]=lvl;
   return lvl;
 }
@@ -1744,7 +1747,7 @@ function startLevel(n, retry){
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
       (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
-      (lvl.ex&&lvl.sway?'<br><b>グラスが揺れる</b>: 携帯を左右に傾けて瓶を合わせる':'')+
+      (lvl.ex&&lvl.sway&&lvl.swayScale?'<br><b>グラスが揺れ、手も震える</b>: 携帯を左右に傾けて瓶を合わせる':'')+
       (lvl.pull?'<br><b>固定パターン</b>(同じ動きを繰り返す)':'');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
@@ -1844,27 +1847,40 @@ function updateLvPick(){
 /* 攻略動作の更新 §10.5 / 別紙§6 */
 /* 安全なグラス揺れ: 見た目と当たり判定を一緒に動かすが、ストリームは常に開口内
    (取り込み率100%を保つ) */
+/* EXの揺れの大きさ。グラス(写真)の揺れは端が空かない範囲(±26px)まで、
+   残りは注ぐ側の手の震え(瓶が逆位相で流れる)にする。相対のずれはグラスの
+   開口の1.05倍にして、何もしなければ揺れの端で必ず縁の外へ出るようにする */
+function swayAmps(){
+  const lvl=G.lvl, sc=CW/390;
+  const scale=(lvl.ex && lvl.sway) ? (lvl.swayScale==null?1:lvl.swayScale) : 0;
+  const half=G.glassHalfW||0;
+  if(!scale || !half) return {photo:0, hand:0, total:0};
+  const total=clamp(half*1.05*scale, 20*sc, 90*sc);
+  const photo=Math.min(26*sc, total*0.4);
+  return {photo, hand:total-photo, total};
+}
 function safeSwayOffset(now){
   const sw=G.lvl.sway;
   if(!sw || !G.lvl.ex) return {x:0,rot:0};
-  const sc=CW/390, t=now/1000;
-  return {
-    x: Math.sin(t*Math.PI*2/sw.period)*sw.amp*sc,
-    rot: sw.rot ? Math.sin(t*Math.PI*2/(sw.period*1.3))*sw.rot : 0,
-  };
+  const t=now/1000, a=swayAmps();
+  return { x: Math.sin(t*Math.PI*2/sw.period)*a.photo, rot:0 };
 }
-/* EXの揺れ: グラスは左右に揺れ、瓶は携帯の左右の傾きで合わせる。
-   ずれが許容(±14px)を超えると入らなくなる。センサーが無い端末では自動で追う */
-const SWAY_RANGE=40, SWAY_TOL=14, SWAY_FADE=14;
+/* EXの揺れ: グラスが揺れ、手も震える。瓶は携帯の左右の傾きで合わせる。
+   判定は見た目どおり: ストリームが縁の内側に落ちていれば入り、外れたら入らない。
+   センサーが無い端末では瓶が自動で追う */
 function swayTrackUpdate(){
-  const lvl=G.lvl;
-  if(!lvl.ex || !lvl.sway){ G.streamDX=0; return; }
-  const sc=CW/390;
-  const gx=safeSwayOffset(performance.now()).x;
+  const lvl=G.lvl, s=G.sim;
+  const a=swayAmps();
+  if(!a.total){ G.streamDX=0; return; }
+  const sc=CW/390, t=performance.now()/1000, ph=Math.sin(t*Math.PI*2/lvl.sway.period);
+  const gx=ph*a.photo;                              // グラスの中心のずれ
   const side=Input.side();
-  const sx = side==null ? gx : side*SWAY_RANGE*sc;
+  const range=Math.max(40*sc, a.total*1.15);        // 傾け切ったときの瓶の移動量
+  const sx = side==null ? gx : -ph*a.hand + side*range;
   G.streamDX=sx;
-  const miss=clamp((Math.abs(sx-gx)-SWAY_TOL*sc)/(SWAY_FADE*sc),0,1);
+  const half=G.glassHalfW, sw=(2+7*clamp(s.Q/Math.max(s.target,1e-9),0,1))*0.5+3;
+  const d=Math.abs(sx-gx);
+  const miss=clamp((d-(half-sw))/(2*sw),0,1);       // 縁をまたいだぶんだけ入らない
   G.curIntake=Math.min(G.curIntake??1, 1-miss);
 }
 /* 偽予兆: 予兆マークも出さず、当たり判定も動かさない。肩の動きだけで惑わせる */
@@ -2003,11 +2019,11 @@ function update(dt){
         Input.enabled=true;
         el.pourBtn.disabled=false;
         Input.tilt.gBase = Input.tilt.everGot ? Input.tilt.g : null;
-        if(lvl.ex && lvl.sway && !Save.data.swayTipSeen){
+        if(lvl.ex && lvl.sway && lvl.swayScale && !Save.data.swayTipSeen){
           Save.data.swayTipSeen=true; Save.save();
           notice(Input.side()==null
-            ? 'グラスが揺れる。センサーが無いので瓶は自動で追う'
-            : 'グラスが揺れる。携帯を左右に傾けて瓶を合わせる', 3.6);
+            ? 'グラスが揺れて手も震える。センサーが無いので瓶は自動で追う'
+            : 'グラスが揺れて手も震える。携帯を左右に傾けて瓶を縁の内側に', 3.6);
         }
         if(!Save.data.foamTipSeen){
           Save.data.foamTipSeen=true; Save.save();
@@ -2450,6 +2466,7 @@ function renderScene(now){
   const nf=clamp(s.Q/Qmax,0,1);
   const gl2=sc.glass;
   const gcx0=(X(gl2.topL)+X(gl2.topR))/2;
+  G.glassHalfW=(X(gl2.topR)-X(gl2.topL))/2;          // 開口の半幅(揺れの判定に使う)
   const gcx=gcx0 + sway.x;                          // グラス(写真ごと揺れる)
   const bx=gcx0 + (G.lvl.ex&&G.lvl.sway ? (G.streamDX||0) : sway.x);   // 瓶は傾きで合わせる
   const rimY=topY+my;
