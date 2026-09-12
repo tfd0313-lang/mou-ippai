@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.25 — 電車だけ</div>
+    <div id="ver">prototype v3.26 — 電車だけ(音量+3.6dB)</div>
   </div>
 
   <!-- ゲーム -->
@@ -1386,7 +1386,7 @@ Object.assign(Snd, {
     const ctx=this.ctx, out=ctx.createGain(); out.gain.value=0;
     out.connect(this.master);
     const a={out, tTimer:null}; this.amb=a;
-    out.gain.setTargetAtTime(0.45, ctx.currentTime, 1.2);   // ゆっくり立ち上げる
+    out.gain.setTargetAtTime(0.68, ctx.currentTime, 1.2);   // ゆっくり立ち上げる
     const train=()=>{
       if(this.amb!==a) return;
       const dur=this.ambTrain();
