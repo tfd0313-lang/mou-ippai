@@ -277,16 +277,16 @@ function buildD(out){
   const src=(t,dur)=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
     s.start(t); s.stop(t+dur); return s; };
   const glug=t=>{
-    const d=0.11+Math.random()*0.06, f0=105+Math.random()*40;
+    const d=0.11+Math.random()*0.06, f0=132+Math.random()*48;
     const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
     o.frequency.setValueAtTime(f0*1.5,t);
     o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
     g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.030,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.050,t+0.012);
     g.gain.exponentialRampToValueAtTime(0.0006,t+d);
     o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
     const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
-    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.018,t);
+    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.022,t);
     bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
     src(t,0.12).connect(bf).connect(bg).connect(out);
   };
@@ -296,29 +296,29 @@ function buildD(out){
     s.playbackRate.value=1.4+Math.random()*1.4;
     const f=ctx.createBiquadFilter(); f.type='bandpass';
     f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
-    const g=ctx.createGain(); g.gain.setValueAtTime(0.010+Math.random()*0.016,t);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.006+Math.random()*0.010,t);
     g.gain.exponentialRampToValueAtTime(0.0004,t+d);
     s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
   };
   const pour=()=>{
     const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
-    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=1250; sf.Q.value=0.5;
+    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=2200; sf.Q.value=1.2;
     const sg=ctx.createGain();
     sg.gain.setValueAtTime(0.0001,t0);
-    sg.gain.exponentialRampToValueAtTime(0.012,t0+0.14);
-    sg.gain.setValueAtTime(0.012,t0+dur-0.1);
+    sg.gain.exponentialRampToValueAtTime(0.005,t0+0.14);
+    sg.gain.setValueAtTime(0.005,t0+dur-0.1);
     sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
     src(t0,dur+0.4).connect(sf).connect(sg).connect(out);
-    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=7;
-    cf.frequency.setValueAtTime(190,t0);
-    cf.frequency.linearRampToValueAtTime(640,t0+dur);
+    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=9;
+    cf.frequency.setValueAtTime(300,t0);
+    cf.frequency.linearRampToValueAtTime(900,t0+dur);
     const cg=ctx.createGain();
     cg.gain.setValueAtTime(0.0001,t0);
-    cg.gain.exponentialRampToValueAtTime(0.034,t0+0.16);
+    cg.gain.exponentialRampToValueAtTime(0.020,t0+0.16);
     cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
     src(t0,dur+0.4).connect(cf).connect(cg).connect(out);
     for(let t=t0+0.06;t<t0+dur;t+=0.15+Math.random()*0.10) glug(t);
-    for(let k=0;k<14;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
+    for(let k=0;k<8;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
   };
   return ()=>{
     const r=Math.random();
@@ -336,28 +336,28 @@ function buildE(out){
     s.start(t); s.stop(t+d); return s; };
   /* ガード下の低いうなり */
   const city=ctx.createBiquadFilter(); city.type='lowpass'; city.frequency.value=150;
-  const gC=ctx.createGain(); gC.gain.value=0.055;
+  const gC=ctx.createGain(); gC.gain.value=0.028;
   pn().connect(city).connect(gC).connect(out);
-  osc(0.021,0.016,gC.gain);
+  osc(0.021,0.009,gC.gain);
   /* 店のざわめき */
   for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.75],[1450,1.1,0.30]]){
     const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
-    const g=ctx.createGain(); g.gain.value=0.042*v;
+    const g=ctx.createGain(); g.gain.value=0.024*v;
     pn().connect(bp).connect(lp).connect(g).connect(out);
-    osc(0.05+Math.random()*0.09,0.042*v*0.45,g.gain);
+    osc(0.05+Math.random()*0.09,0.024*v*0.45,g.gain);
   }
   const glug=t=>{
-    const d=0.11+Math.random()*0.06, f0=105+Math.random()*40;
+    const d=0.11+Math.random()*0.06, f0=132+Math.random()*48;
     const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
     o.frequency.setValueAtTime(f0*1.5,t);
     o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
     g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.030,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.050,t+0.012);
     g.gain.exponentialRampToValueAtTime(0.0006,t+d);
     o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
     const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
-    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.018,t);
+    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.022,t);
     bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
     src(t,0.12).connect(bf).connect(bg).connect(out);
   };
@@ -367,29 +367,29 @@ function buildE(out){
     s.playbackRate.value=1.4+Math.random()*1.4;
     const f=ctx.createBiquadFilter(); f.type='bandpass';
     f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
-    const g=ctx.createGain(); g.gain.setValueAtTime(0.010+Math.random()*0.016,t);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.006+Math.random()*0.010,t);
     g.gain.exponentialRampToValueAtTime(0.0004,t+d);
     s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
   };
   const pour=()=>{
     const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
-    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=1250; sf.Q.value=0.5;
+    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=2200; sf.Q.value=1.2;
     const sg=ctx.createGain();
     sg.gain.setValueAtTime(0.0001,t0);
-    sg.gain.exponentialRampToValueAtTime(0.012,t0+0.14);
-    sg.gain.setValueAtTime(0.012,t0+dur-0.1);
+    sg.gain.exponentialRampToValueAtTime(0.005,t0+0.14);
+    sg.gain.setValueAtTime(0.005,t0+dur-0.1);
     sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
     src(t0,dur+0.4).connect(sf).connect(sg).connect(out);
-    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=7;
-    cf.frequency.setValueAtTime(190,t0);
-    cf.frequency.linearRampToValueAtTime(640,t0+dur);
+    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=9;
+    cf.frequency.setValueAtTime(300,t0);
+    cf.frequency.linearRampToValueAtTime(900,t0+dur);
     const cg=ctx.createGain();
     cg.gain.setValueAtTime(0.0001,t0);
-    cg.gain.exponentialRampToValueAtTime(0.034,t0+0.16);
+    cg.gain.exponentialRampToValueAtTime(0.020,t0+0.16);
     cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
     src(t0,dur+0.4).connect(cf).connect(cg).connect(out);
     for(let t=t0+0.06;t<t0+dur;t+=0.15+Math.random()*0.10) glug(t);
-    for(let k=0;k<14;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
+    for(let k=0;k<8;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
   };
   const clack=(t,v)=>{
     const g=ctx.createGain(); g.gain.setValueAtTime(v,t);
@@ -411,18 +411,18 @@ function buildE(out){
     pk.frequency.value=95; pk.Q.value=1.2; pk.gain.value=9;
     const g=ctx.createGain();
     g.gain.setValueAtTime(0.0001,t0);
-    g.gain.exponentialRampToValueAtTime(0.155,t0+dur*0.32);
-    g.gain.setValueAtTime(0.155,t0+dur*0.58);
+    g.gain.exponentialRampToValueAtTime(0.290,t0+dur*0.32);
+    g.gain.setValueAtTime(0.290,t0+dur*0.58);
     g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
     src(t0,dur+0.3).connect(lp).connect(pk).connect(g).connect(out);
     const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2200; bp.Q.value=1.1;
     const g2=ctx.createGain();
     g2.gain.setValueAtTime(0.0001,t0);
-    g2.gain.exponentialRampToValueAtTime(0.018,t0+dur*0.42);
+    g2.gain.exponentialRampToValueAtTime(0.030,t0+dur*0.42);
     g2.gain.exponentialRampToValueAtTime(0.0001,t0+dur*0.95);
     src(t0,dur+0.3).connect(bp).connect(g2).connect(out);
     for(let t=t0+dur*0.06;t<t0+dur*0.94;t+=1.22){
-      const v=0.075*env((t-t0)/dur);
+      const v=0.115*env((t-t0)/dur);
       if(v<=0.002) continue;
       clack(t,v); clack(t+0.085,v*0.75); clack(t+0.60,v*0.9); clack(t+0.685,v*0.68);
     }
