@@ -1,0 +1,25 @@
+# tfd0313-lang/mou-ippai の deploy ブランチを mou-ippai/mou-ippai.github.io の
+# main へ流し込む。ページの中身は deploy 側が持っているので、こちらは
+# 受け取って置くだけ。
+#
+# このファイルは deploy ブランチにも入れてある。入れていないと、下の
+# force push が main をまるごと置き換えたときに自分自身が消えてしまい、
+# 二度と動かなくなる(実際に一度消えた)。
+#
+# 送り出し側(tfd0313-lang/mou-ippai)にも同じファイルが乗るので、
+# 受け取り側でだけ動くように if で止めている。
+name: sync
+on:
+  schedule: [{cron: '*/30 * * * *'}]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    if: github.repository == 'mou-ippai/mou-ippai.github.io'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git fetch https://github.com/tfd0313-lang/mou-ippai deploy
+          git push --force origin FETCH_HEAD:refs/heads/main
