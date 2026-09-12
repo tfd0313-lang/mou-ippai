@@ -399,7 +399,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.16 — 18人 完成</div>
+    <div id="ver">prototype v3.17 — 18人 完成</div>
   </div>
 
   <!-- ゲーム -->
@@ -1022,7 +1022,7 @@ function exLevel(n){
     // 揺れは本物(瓶を傾きで追わないと入らない)。19・20は無し、21から段階的に
     sway:{period:2.8}, swayScale: n<=20?0.35 : n===21?0.6 : n<=24?0.8 : 1.0, decorSway:0,
     hazard:hazards[0]||null, hazards, fake, pull, pulse, ex:true, exName, exStage:band,
-    grace: band==='A'||band==='B' ? 0.7 : band==='C' ? 0.6 : 0.5,
+    grace: band==='A'||band==='B' ? 1.1 : band==='C' ? 1.0 : 0.9,
     glassNote, hints:EX_HINTS[band]};
   exCache[n]=lvl;
   return lvl;
@@ -1429,7 +1429,7 @@ function simStep(s,dt,env){
   else if(env.lag>0){ s.Q=Math.max(s.target, s.Q-(env.Qmax/env.lag)*dt); }   // 止めの遅れ
   else { s.Q=s.target; }
   if(s.Q>0){ s.poured=true; s.zeroT=0; }
-  else if(s.poured){ s.zeroT+=dt; }
+  else if(s.poured && !env.hold){ s.zeroT+=dt; }    // 予兆・妨害の間は数えない
 
   if(s.Q>0 && !s.out){
     const dV=s.Q*dt;
@@ -1981,10 +1981,13 @@ function swayTrackUpdate(){
   if(!a.total){ G.streamDX=0; return; }
   const sc=CW/390, t=performance.now()/1000, ph=Math.sin(t*Math.PI*2/lvl.sway.period);
   const gx=ph*a.photo;                              // グラスの中心のずれ
-  const side=Input.side();
+  // 傾けモードで遊んでいる人だけが自分で追う。ボタンで遊んでいる人は瓶が自動で追う
+  // (ボタン操作なのに携帯を傾けないとこぼれる、という理不尽をなくす)
+  const side = Input.mode==='tilt' ? Input.side() : null;
   const range=Math.max(40*sc, a.total*1.15);        // 傾け切ったときの瓶の移動量
   const sx = side==null ? gx : -ph*a.hand + side*range;
   G.streamDX=sx;
+  if(s.Q<=0){ return; }                             // 注いでいない間は外れようがない
   const half=G.glassHalfW, sw=(2+7*clamp(s.Q/Math.max(s.target,1e-9),0,1))*0.5+3;
   const d=Math.abs(sx-gx);
   const miss=clamp((d-(half-sw))/(2*sw),0,1);       // 縁をまたいだぶんだけ入らない
@@ -2164,7 +2167,11 @@ function update(dt){
       hazardUpdate(dt);
       pullUpdate(dt);
       swayTrackUpdate();
-      simStep(s,dt,{Qmax:Qrun,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl)});
+      // 相手が動いている間(予兆〜動作〜引き)は判定までの時間を止める。
+      // 「予兆が出たら止める」を守ると猶予を使い切って失敗する、が起きないように
+      const hzBusy = (G.hz && (G.hz.state==='tel'||G.hz.state==='hazard'))
+                  || (G.pull && G.pull.state==='on');
+      simStep(s,dt,{Qmax:Qrun,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl),hold:hzBusy});
       const nf=clamp(s.Q/Qmax,0,1), fill=clamp((s.L+s.P)/s.C,0,1);
       const foamR=s.P/Math.max(s.L+s.P,1e-9);
       Snd.pour(nf,fill,foamR,dt);
