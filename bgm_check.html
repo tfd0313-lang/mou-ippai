@@ -31,6 +31,10 @@ input[type=range]{flex:1;accent-color:var(--amber)}
 <div class="desc">ざわめき＋低いうなり＋サイン波の和音。和音が電子音に聞こえるのが弱点。</div>
 <button data-k="now">再生</button></div>
 
+<div class="card"><h2>D 夜風と注ぐ音　← いま本体に入っているもの</h2>
+<div class="desc">夜風を土台に、トクトクトクと注ぐ音、遠いざわめきと笑い声。旋律なし。</div>
+<button data-k="d">再生</button></div>
+
 <div class="card"><h2>A 炉端</h2>
 <div class="desc">店のざわめき、炭のはぜる音、遠くのグラス。ときどき三味線に近い撥弦が1音。</div>
 <button data-k="a">再生</button></div>
@@ -241,7 +245,86 @@ function buildC(out){
     return 4200+Math.random()*3600;
   };
 }
-const BUILD={now:buildNow,a:buildA,b:buildB,c:buildC};
+function buildD(out){
+  const pn=()=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true; s.start(); return s; };
+  const osc=(hz,amt,target)=>{ const o=ctx.createOscillator(); o.frequency.value=hz;
+    const g=ctx.createGain(); g.gain.value=amt; o.connect(g).connect(target); o.start(); };
+  /* 夜風 */
+  const wind=ctx.createBiquadFilter(); wind.type='lowpass'; wind.frequency.value=430;
+  const gW=ctx.createGain(); gW.gain.value=0.075;
+  pn().connect(wind).connect(gW).connect(out);
+  osc(0.043,0.042,gW.gain); osc(0.017,0.026,gW.gain);
+  const gap=ctx.createBiquadFilter(); gap.type='bandpass'; gap.frequency.value=900; gap.Q.value=2.2;
+  const gG=ctx.createGain(); gG.gain.value=0.011;
+  pn().connect(gap).connect(gG).connect(out);
+  osc(0.031,360,gap.frequency); osc(0.031,0.008,gG.gain);
+  /* 遠いざわめき(小さく) */
+  for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.7],[1450,1.1,0.28]]){
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
+    const g=ctx.createGain(); g.gain.value=0.030*v;
+    pn().connect(bp).connect(lp).connect(g).connect(out);
+    osc(0.05+Math.random()*0.09,0.030*v*0.45,g.gain);
+  }
+  const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=120;
+  const gr=ctx.createGain(); gr.gain.value=0.045;
+  pn().connect(rum).connect(gr).connect(out);
+
+  const src=(t,dur)=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.start(t); s.stop(t+dur); return s; };
+  const glug=t=>{
+    const d=0.11+Math.random()*0.06, f0=105+Math.random()*40;
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(f0*1.5,t);
+    o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.030,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0006,t+d);
+    o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
+    const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
+    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.018,t);
+    bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
+    src(t,0.12).connect(bf).connect(bg).connect(out);
+  };
+  const fizz=t=>{
+    const d=0.006+Math.random()*0.014;
+    const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.playbackRate.value=1.4+Math.random()*1.4;
+    const f=ctx.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.010+Math.random()*0.016,t);
+    g.gain.exponentialRampToValueAtTime(0.0004,t+d);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
+  };
+  const pour=()=>{
+    const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
+    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=1250; sf.Q.value=0.5;
+    const sg=ctx.createGain();
+    sg.gain.setValueAtTime(0.0001,t0);
+    sg.gain.exponentialRampToValueAtTime(0.012,t0+0.14);
+    sg.gain.setValueAtTime(0.012,t0+dur-0.1);
+    sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
+    src(t0,dur+0.4).connect(sf).connect(sg).connect(out);
+    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=7;
+    cf.frequency.setValueAtTime(190,t0);
+    cf.frequency.linearRampToValueAtTime(640,t0+dur);
+    const cg=ctx.createGain();
+    cg.gain.setValueAtTime(0.0001,t0);
+    cg.gain.exponentialRampToValueAtTime(0.034,t0+0.16);
+    cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
+    src(t0,dur+0.4).connect(cf).connect(cg).connect(out);
+    for(let t=t0+0.06;t<t0+dur;t+=0.15+Math.random()*0.10) glug(t);
+    for(let k=0;k<14;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
+  };
+  return ()=>{
+    const r=Math.random();
+    if(r<0.42){ pour(); return 6500+Math.random()*5000; }
+    if(r<0.70){ laugh(out,0.019); return 3000+Math.random()*3000; }
+    if(r<0.88){ clink(out,0.013); return 2600+Math.random()*3000; }
+    tap(out,0.011); return 2600+Math.random()*3000;
+  };
+}
+const BUILD={now:buildNow,a:buildA,b:buildB,c:buildC,d:buildD};
 
 function stop(){
   if(!live) return;
@@ -256,8 +339,9 @@ function play(k,btn){
   stop();
   const out=ctx.createGain(); out.gain.value=0; out.connect(master);
   const step=BUILD[k](out);
+  const lvl = k==='d' ? 0.45 : 1;      // Dは本体と同じ「背景の大きさ」で鳴らす
   const l={out,timer:null}; live=l;
-  out.gain.setTargetAtTime(1,ctx.currentTime,0.8);
+  out.gain.setTargetAtTime(lvl,ctx.currentTime,0.8);
   const tick=()=>{ if(live!==l) return; const d=step(); l.timer=setTimeout(tick,d); };
   l.timer=setTimeout(tick,700);
   btn.classList.add('on'); btn.textContent='再生中';

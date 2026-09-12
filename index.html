@@ -399,7 +399,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.20 — 店の空気</div>
+    <div id="ver">prototype v3.21 — 夜風とトクトク</div>
   </div>
 
   <!-- ゲーム -->
@@ -1341,13 +1341,12 @@ const Voice = {
 try{ speechSynthesis.onvoiceschanged=()=>Voice.pick(); }catch(e){}
 
 /* ホーム画面の店の空気。音源ファイルは持たず、その場で合成する(0MB)。
-   狙いはタイトル画の居酒屋そのもの: 遠いざわめき、炭のはぜる音、皿とグラス、
-   たまに誰かの笑い声。そこへ三味線に近い撥弦を数秒に1音だけ置く。
-   旋律を通さないのは、鳴らすのがホーム画面だけでも、はっきりした曲にすると
-   「はじめる」を押すたびに途切れて耳につくため */
+   オーナーの指定した絵は3つ: ①夜風 ②トクトクトクとビールを注ぐ音
+   ③賑やかな会話や笑い声を小さく。旋律は置かない。この画面の主役は
+   注ぐ音で、それはゲーム中の注ぎと同じ作り方(空気柱の共鳴+ゴボッ)で鳴らす */
 Object.assign(Snd, {
-  /* ざわめき用のノイズ。白のままだと高い方が刺さって「サー」と鳴るので、
-     ピンクに寄せた別のバッファを1本だけ作る(注ぎの音は白のまま) */
+  /* ざわめきと風に使うノイズ。白のままだと高い方が刺さって「サー」と鳴るので、
+     ピンクに寄せた別のバッファを1本だけ作る(注ぎの効果音は白のまま) */
   pink(){
     if(this.pinkBuf) return this.pinkBuf;
     const sr=this.ctx.sampleRate, n=sr*3;
@@ -1364,89 +1363,123 @@ Object.assign(Snd, {
     if(!this.ctx || this.amb) return;
     const ctx=this.ctx, out=ctx.createGain(); out.gain.value=0;
     out.connect(this.master);
-    const a={out, timer:null, i:2}; this.amb=a;
-
+    const a={out, timer:null}; this.amb=a;
     const pn=()=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true; s.start(); return s; };
-    const pan=v=>{ const p=ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-                   if(p) p.pan.value=v; return p; };
-    const to=(node,dest)=>{ const p=pan(Math.random()*1.2-0.6); return p? node.connect(p).connect(dest) : node.connect(dest); };
+    const lfo=(hz,amt,target)=>{
+      const o=ctx.createOscillator(); o.frequency.value=hz;
+      const g=ctx.createGain(); g.gain.value=amt;
+      o.connect(g).connect(target); o.start(); return o;
+    };
 
-    /* ざわめき: 声の帯を3本に分け、それぞれ別々にゆっくり揺らす。
-       1本だけだと「サー」と平らに鳴って、人がいるように聞こえない */
-    for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.75],[1450,1.1,0.3]]){
+    /* ① 夜風。低い帯をゆっくり膨らませる。速さの違う2つの揺れを重ねると、
+       一定の「サー」ではなく、吹いては止む息づかいになる */
+    const wind=ctx.createBiquadFilter(); wind.type='lowpass'; wind.frequency.value=430;
+    const gW=ctx.createGain(); gW.gain.value=0.075;
+    pn().connect(wind).connect(gW).connect(out);
+    lfo(0.043,0.042,gW.gain); lfo(0.017,0.026,gW.gain);
+    /* すきま風。細い帯をゆっくり上下させる */
+    const gap=ctx.createBiquadFilter(); gap.type='bandpass'; gap.frequency.value=900; gap.Q.value=2.2;
+    const gG=ctx.createGain(); gG.gain.value=0.011;
+    pn().connect(gap).connect(gG).connect(out);
+    lfo(0.031,360,gap.frequency); lfo(0.031,0.008,gG.gain);
+
+    /* ③ 遠い店内のざわめき。小さく。声の帯を3本に分け、別々にゆっくり揺らす。
+       1本だと平らに鳴って、人がいるように聞こえない */
+    for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.7],[1450,1.1,0.28]]){
       const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
       const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
-      const g=ctx.createGain(); g.gain.value=0.055*v*0.9;
-      to(pn().connect(bp).connect(lp).connect(g), out);
-      const lfo=ctx.createOscillator(); lfo.frequency.value=0.05+Math.random()*0.09;
-      const lg=ctx.createGain(); lg.gain.value=0.055*v*0.45;
-      lfo.connect(lg).connect(g.gain); lfo.start();
+      const g=ctx.createGain(); g.gain.value=0.030*v;
+      pn().connect(bp).connect(lp).connect(g).connect(out);
+      lfo(0.05+Math.random()*0.09, 0.030*v*0.45, g.gain);
     }
     /* 部屋の低いうなり */
     const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=120;
-    const gr=ctx.createGain(); gr.gain.value=0.06;
+    const gr=ctx.createGain(); gr.gain.value=0.045;
     pn().connect(rum).connect(gr).connect(out);
-    /* 炭の遠い炎 */
-    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3400;
-    const gs=ctx.createGain(); gs.gain.value=0.006;
-    pn().connect(hp).connect(gs).connect(out);
 
-    out.gain.setTargetAtTime(0.9, ctx.currentTime, 1.2);      // ゆっくり立ち上げる
+    // 背景なので小さく。中の釣り合いはそのままに、全体を一段下げる
+    out.gain.setTargetAtTime(0.45, ctx.currentTime, 1.2);     // ゆっくり立ち上げる
 
-    const SCALE=[110.00,130.81,146.83,164.81,196.00,220.00,261.63,293.66];  // ヨナ抜き短音階
-    const STEP=[-2,-1,1,2,3];
+    /* ② 注ぐ音を主役に、笑い声とグラスをときどき挟む */
     const tick=()=>{
       if(this.amb!==a) return;
       const r=Math.random();
-      if(r<0.34){
-        a.i=(a.i+STEP[Math.floor(Math.random()*STEP.length)]+SCALE.length)%SCALE.length;
-        this.ambPluck(SCALE[a.i],0.085);
-      }
-      else if(r<0.52) this.ambClink();
-      else if(r<0.66) this.ambTap();
-      else if(r<0.80) this.ambLaugh();
-      else {
-        const n=3+Math.floor(Math.random()*4);
-        for(let k=0;k<n;k++) setTimeout(()=>{ if(this.amb===a) this.ambCrackle(); }, k*(40+Math.random()*220));
-      }
-      a.timer=setTimeout(tick, 2600+Math.random()*3200);
+      let wait;
+      if(r<0.42){ this.ambPour(); wait=6500+Math.random()*5000; }
+      else if(r<0.70){ this.ambLaugh(); wait=3000+Math.random()*3000; }
+      else if(r<0.88){ this.ambClink(); wait=2600+Math.random()*3000; }
+      else { this.ambTap(); wait=2600+Math.random()*3000; }
+      a.timer=setTimeout(tick, wait);
     };
-    a.timer=setTimeout(tick, 1400);
+    a.timer=setTimeout(tick, 2200);
   },
-  /* 撥弦(カープラス・ストロング)。短いノイズを弦の長さぶんの輪に入れて回し、
-     1周ごとに少しずつなまらせる。サイン波の和音より弦らしく、電子音に聞こえない */
-  ambPluck(f,vol){
-    const ctx=this.ctx, sr=ctx.sampleRate, dur=3.4;
-    const n=Math.round(sr*dur), N=Math.max(2,Math.round(sr/f));
-    const buf=ctx.createBuffer(1,n,sr), d=buf.getChannelData(0), ring=new Float32Array(N);
-    for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
-    let lp=0;
-    for(let i=0,p=0;i<n;i++){
-      const cur=ring[p];
-      d[i]=cur;
-      lp+=0.48*(0.5*(cur+ring[(p+1)%N])-lp);
-      ring[p]=lp*0.9965;
-      p=(p+1)%N;
-    }
-    const at=Math.round(sr*0.004);
-    for(let i=0;i<at;i++) d[i]*=i/at;
-    const rel=Math.round(sr*0.25);
-    for(let i=0;i<rel;i++) d[n-1-i]*=i/rel;
-    const s=ctx.createBufferSource(); s.buffer=buf;
-    const body=ctx.createBiquadFilter(); body.type='bandpass'; body.frequency.value=f*3.2; body.Q.value=0.7;
-    const hi=ctx.createBiquadFilter(); hi.type='lowpass'; hi.frequency.value=2600;
-    const g=ctx.createGain(); g.gain.value=vol;
-    s.connect(body).connect(hi).connect(g).connect(this.amb?this.amb.out:this.master);
-    s.start();
+  /* ② トクトクトク。ゲーム中の注ぎと同じ作りを、遠くで小さく鳴らす。
+     細い流れ + グラスの空気柱(液面が上がるほど高くなる) + 瓶口のゴボッ */
+  ambPour(){
+    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
+    const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
+    const src=()=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+                    s.start(t0); s.stop(t0+dur+0.4); return s; };
+    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=1250; sf.Q.value=0.5;
+    const sg=ctx.createGain();
+    sg.gain.setValueAtTime(0.0001,t0);
+    sg.gain.exponentialRampToValueAtTime(0.012,t0+0.14);
+    sg.gain.setValueAtTime(0.012,t0+dur-0.1);
+    sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
+    src().connect(sf).connect(sg).connect(out);
+
+    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=7;
+    cf.frequency.setValueAtTime(190,t0);
+    cf.frequency.linearRampToValueAtTime(640,t0+dur);      // 満ちていく=音が上がる
+    const cg=ctx.createGain();
+    cg.gain.setValueAtTime(0.0001,t0);
+    cg.gain.exponentialRampToValueAtTime(0.034,t0+0.16);
+    cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
+    src().connect(cf).connect(cg).connect(out);
+
+    for(let t=t0+0.06; t<t0+dur; t+=0.15+Math.random()*0.10) this.ambGlug(t);
+    /* 泡のはじける余韻 */
+    for(let k=0;k<14;k++) this.ambFizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
   },
-  /* 遠くでグラスが触れる */
+  /* 瓶口から空気が入る「トク」。離散のパルスで鳴らす */
+  ambGlug(t){
+    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
+    const d=0.11+Math.random()*0.06, f0=105+Math.random()*40;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(f0*1.5,t);
+    o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.030,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0006,t+d);
+    o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
+    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+    const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
+    const bg=ctx.createGain();
+    bg.gain.setValueAtTime(0.018,t); bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
+    s.connect(bf).connect(bg).connect(out); s.start(t); s.stop(t+0.12);
+  },
+  /* 泡の炭酸がはじける、ごく短い音 */
+  ambFizz(t){
+    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
+    const d=0.006+Math.random()*0.014;
+    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+    s.playbackRate.value=1.4+Math.random()*1.4;
+    const f=ctx.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.010+Math.random()*0.016,t);
+    g.gain.exponentialRampToValueAtTime(0.0004,t+d);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
+  },
+  /* 遠くでグラスが触れる。整数倍でない部分音=ガラスらしい濁り */
   ambClink(){
     const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.014,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+    g.gain.setValueAtTime(0.013,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200;
     g.connect(lp).connect(this.amb?this.amb.out:this.master);
     const f=1500+Math.random()*1100;
-    for(const [m,v] of [[1,1],[2.71,0.35],[5.4,0.12]]){     // 整数倍でない=金属やガラスらしい濁り
+    for(const [m,v] of [[1,1],[2.71,0.35],[5.4,0.12]]){
       const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
       const gg=ctx.createGain(); gg.gain.value=v; o.connect(gg).connect(g); o.start(t); o.stop(t+0.65);
     }
@@ -1454,39 +1487,29 @@ Object.assign(Snd, {
   /* 皿や丼を置く */
   ambTap(){
     const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.012,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+    g.gain.setValueAtTime(0.011,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
     const bp=ctx.createBiquadFilter(); bp.type='bandpass';
     bp.frequency.value=420+Math.random()*480; bp.Q.value=3;
     const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
     s.connect(bp).connect(g).connect(this.amb?this.amb.out:this.master);
     s.start(t); s.stop(t+0.3);
   },
-  /* 遠くで誰かが笑う。声の帯だけ持ち上げ、細かく震わせてゆっくり膨らませる */
+  /* ③ 遠くで誰かが笑う。声の帯だけ持ち上げ、細かく震わせてゆっくり膨らませる */
   ambLaugh(){
     const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
     g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.020,t+0.5+Math.random()*0.4);
+    g.gain.exponentialRampToValueAtTime(0.019,t+0.5+Math.random()*0.4);
     g.gain.exponentialRampToValueAtTime(0.0001,t+1.8+Math.random()*1.0);
     const bp=ctx.createBiquadFilter(); bp.type='bandpass';
     bp.frequency.value=500+Math.random()*320; bp.Q.value=1.6;
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1700;
     const trem=ctx.createGain(); trem.gain.value=1;
-    const lfo=ctx.createOscillator(); lfo.frequency.value=4.5+Math.random()*2.5;
-    const lg=ctx.createGain(); lg.gain.value=0.45;
-    lfo.connect(lg).connect(trem.gain); lfo.start(t); lfo.stop(t+3);
+    const o=ctx.createOscillator(); o.frequency.value=4.5+Math.random()*2.5;
+    const og=ctx.createGain(); og.gain.value=0.45;
+    o.connect(og).connect(trem.gain); o.start(t); o.stop(t+3);
     const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
     s.connect(bp).connect(lp).connect(trem).connect(g).connect(this.amb?this.amb.out:this.master);
     s.start(t); s.stop(t+3.2);
-  },
-  /* 炭がはぜる */
-  ambCrackle(){
-    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.006+Math.random()*0.010,t);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
-    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2200;
-    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-    s.connect(hp).connect(g).connect(this.amb?this.amb.out:this.master);
-    s.start(t); s.stop(t+0.08);
   },
   ambStop(){
     const a=this.amb; if(!a) return;
