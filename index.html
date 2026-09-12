@@ -71,7 +71,8 @@ body{
 #home h1{text-shadow:0 2px 14px rgba(0,0,0,.85),0 0 30px rgba(232,161,60,.4)}
 #home .sub,#modeHint,#homeBest,#ver{text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 9px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.75)}
 .seg{background:rgba(16,10,6,.86)}
-#voiceBtn{background:rgba(16,10,6,.86)}
+#voiceBtn,#bgmBtn{background:rgba(16,10,6,.86)}
+#sndRow{display:flex;gap:8px;justify-content:center;align-items:center}
 /* レベル選択: 18個並べると画面を埋めて絵が出せないので1行にまとめる */
 #levels[hidden]{display:none}
 #lvPick{display:flex;align-items:center;gap:10px;width:100%;max-width:340px;
@@ -105,10 +106,10 @@ body{
 /* 押した瞬間に反応を返す。触れてから色が変わるまでの間があると遅く感じる */
 button{touch-action:manipulation}
 .seg button:active{background:rgba(232,161,60,.34)}
-#voiceBtn:active{transform:scale(.94)}
+#voiceBtn:active,#bgmBtn:active{transform:scale(.94)}
 #levels .lvbtns button:active{transform:scale(.88);background:var(--amber);color:#221503}
 #modeHint{color:var(--mut);font-size:12px;line-height:1.6;max-width:300px}
-#voiceBtn{appearance:none;cursor:pointer;font:inherit;font-size:12px;letter-spacing:.08em;
+#voiceBtn,#bgmBtn{appearance:none;cursor:pointer;font:inherit;font-size:12px;letter-spacing:.08em;
   color:var(--mut);background:var(--wood);border:1px solid var(--wood-hi);border-radius:999px;padding:8px 16px}
 /* ONでも塗りつぶさない。塗りのアンバーは「はじめる」だけにして視線を取り合わない */
 #voiceBtn.on{color:var(--amber);background:rgba(232,161,60,.16);border-color:var(--amber);font-weight:700}
@@ -389,7 +390,7 @@ button{touch-action:manipulation}
       <button id="modeTiltBtn">傾け／スワイプ</button>
     </div>
     <div id="modeHint"></div>
-    <button id="voiceBtn" class="on" aria-pressed="true">声 ON</button>
+    <div id="sndRow"><button id="voiceBtn" class="on" aria-pressed="true">声 ON</button><button id="bgmBtn" class="on" aria-pressed="true">BGM ON</button></div>
     <div id="lvPick" role="group" aria-label="レベル選択">
       <button id="lvPrev" aria-label="前のレベル">◀</button>
       <span class="now" id="lvNow"></span>
@@ -398,7 +399,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.15 — 18人 完成</div>
+    <div id="ver">prototype v3.16 — 18人 完成</div>
   </div>
 
   <!-- ゲーム -->
@@ -1042,7 +1043,7 @@ const Save = {
   key:'mouippai_v1',
   data:{schemaVersion:2, highestCleared:0, bestByLevel:{}, best:{button:0,tilt:0},
         totalSuccess:0, totalPerfect:0, voice:true, foamTipSeen:false, swipeTipSeen:false,
-        ex:{best:0, streak:0, attempts:{}, fails:{}}},
+        bgm:true, ex:{best:0, streak:0, attempts:{}, fails:{}}},
   load(){ try{
     const raw=localStorage.getItem(this.key); if(!raw) return;
     const d=JSON.parse(raw); if(!d) return;
@@ -1057,6 +1058,7 @@ const Save = {
       if(!this.data.ex.fails) this.data.ex.fails={};
       if(typeof this.data.ex.best!=='number') this.data.ex.best=0;
       if(typeof this.data.ex.streak!=='number') this.data.ex.streak=0;
+      if(typeof this.data.bgm!=='boolean') this.data.bgm=true;
       for(const k of ['highestCleared','totalSuccess','totalPerfect']) if(typeof this.data[k]!=='number'||isNaN(this.data[k])) this.data[k]=0;
       if(typeof this.data.best.button!=='number') this.data.best.button=0;
       if(typeof this.data.best.tilt!=='number') this.data.best.tilt=0;
@@ -1080,6 +1082,7 @@ const Snd = {
   gStream:null, fStream:null,      // ストリームの乱流
   gCav:null, fCav:null,            // 容器の共鳴(水位で上がる)
   _glugAt:0, _crackAt:0, _bubAt:0,
+  amb:null,                        // ホーム画面の店の空気(合成。音源ファイルは持たない)
   init(){
     if(this.ctx) return;
     try{
@@ -1337,6 +1340,84 @@ const Voice = {
 };
 try{ speechSynthesis.onvoiceschanged=()=>Voice.pick(); }catch(e){}
 
+/* ホーム画面の店の空気。曲は流さない: 18人の場所(家・居酒屋・路地裏・炉端)が
+   バラバラなので旋律を1本通すとどこかで必ず浮く。遠いざわめき・低い空調・
+   時おりのグラスと柔らかい和音だけを合成で作る(音源ファイルは持たない) */
+Object.assign(Snd, {
+  ambStart(){
+    if(!this.ctx || this.amb) return;
+    const ctx=this.ctx, out=ctx.createGain(); out.gain.value=0;
+    out.connect(this.master);
+    const noise=()=>{ const s=ctx.createBufferSource(); s.buffer=this.noiseBuf; s.loop=true; s.start(); return s; };
+    // 遠いざわめき(人の声の帯だけ残したノイズをゆっくり揺らす)
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=620; bp.Q.value=0.55;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500;
+    const gMur=ctx.createGain(); gMur.gain.value=0.05;
+    noise().connect(bp).connect(lp).connect(gMur).connect(out);
+    const lfo=ctx.createOscillator(); lfo.frequency.value=0.08;
+    const lfoG=ctx.createGain(); lfoG.gain.value=0.018;
+    lfo.connect(lfoG).connect(gMur.gain); lfo.start();
+    // 低い空調のうなり
+    const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=110;
+    const gRum=ctx.createGain(); gRum.gain.value=0.05;
+    noise().connect(rum).connect(gRum).connect(out);
+    const a={out, timer:null, t:0}; this.amb=a;
+    out.gain.setTargetAtTime(0.9, ctx.currentTime, 1.2);      // ゆっくり立ち上げる
+    // 和音とグラスの音。数秒おきにどちらか1つだけ
+    const scale=[196.00,220.00,261.63,293.66,329.63,392.00];  // 柔らかい5音音階
+    let i=0;
+    const tick=()=>{
+      if(this.amb!==a) return;
+      a.t++;
+      if(a.t%2===0){
+        const f=scale[(i=(i+2+Math.floor(Math.random()*3))%scale.length)];
+        this.ambTone(f,0.030);
+        if(Math.random()<0.5) setTimeout(()=>{ if(this.amb===a) this.ambTone(f*1.5,0.018); },520);
+      } else if(Math.random()<0.45){
+        this.ambClink();
+      }
+      a.timer=setTimeout(tick, 3200+Math.random()*2600);
+    };
+    a.timer=setTimeout(tick, 1400);
+  },
+  /* 柔らかい和音(木の打楽器に近い音) */
+  ambTone(f,vol){
+    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+2.4);
+    g.connect(this.amb?this.amb.out:this.master);
+    for(const [m,v] of [[1,1],[2.0,0.25],[3.01,0.08]]){
+      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
+      const gg=ctx.createGain(); gg.gain.value=v; o.connect(gg).connect(g); o.start(t); o.stop(t+2.5);
+    }
+  },
+  /* 遠くでグラスが触れる音 */
+  ambClink(){
+    const ctx=this.ctx, t=ctx.currentTime;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.012,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+    g.connect(this.amb?this.amb.out:this.master);
+    const f=1800+Math.random()*900;
+    for(const m of [1,1.52]){
+      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
+      const gg=ctx.createGain(); gg.gain.value=m===1?1:0.4;
+      o.connect(gg).connect(g); o.start(t); o.stop(t+0.55);
+    }
+  },
+  ambStop(){
+    const a=this.amb; if(!a) return;
+    this.amb=null;
+    if(a.timer) clearTimeout(a.timer);
+    try{ a.out.gain.setTargetAtTime(0,this.ctx.currentTime,0.25); }catch(e){}
+    setTimeout(()=>{ try{ a.out.disconnect(); }catch(e){} },1500);
+  },
+});
+/* ホーム画面にいるときだけ鳴らす */
+function syncBgm(){
+  if(Save.data.bgm && el.home.classList.contains('on') && Snd.ctx) Snd.ambStart();
+  else Snd.ambStop();
+}
+
 /* ---------- シミュレーション §7 ---------- */
 function newSim(cap){
   return {C:cap, L:0,P:0,W:0,Q:0,target:0, poured:false, zeroT:0, ovf:0, out:null,
@@ -1516,7 +1597,7 @@ const el={home:$('home'),game:$('game'),result:$('result'),bubble:$('bubble'),te
   hud:$('hud'),cv:$('cv'),pourBtn:$('pourBtn'),tiltGuide:$('tiltGuide'),tiltFill:$('tiltFill'),tiltMsg:$('tiltMsg'),
   verdict:$('verdict'),resMeta:$('resMeta'),resScore:$('resScore'),clearTag:$('clearTag'),
   newBest:$('newBest'),nextBtn:$('nextBtn'),retryBtn:$('retryBtn'),toHome:$('toHome'),startBtn:$('startBtn'),
-  modeBtnBtn:$('modeBtnBtn'),modeTiltBtn:$('modeTiltBtn'),voiceBtn:$('voiceBtn'),homeBest:$('homeBest'),
+  modeBtnBtn:$('modeBtnBtn'),modeTiltBtn:$('modeTiltBtn'),voiceBtn:$('voiceBtn'),bgmBtn:$('bgmBtn'),homeBest:$('homeBest'),
   levels:$('levels'),modeHint:$('modeHint'),lvNow:$('lvNow'),lvPrev:$('lvPrev'),lvNext:$('lvNext'),
   homeBg:$('homeBg'),intro:$('intro'),introLv:$('introLv'),introName:$('introName'),introPlace:$('introPlace'),introInfo:$('introInfo'),
   notice:$('notice'),debug:$('debug'),charaArea:$('charaArea'),
@@ -1790,6 +1871,7 @@ function show(name){
   el.home.classList.toggle('on',name==='home');
   el.game.classList.toggle('on',name==='game');
   if(name==='home') requestAnimationFrame(()=>{ el.home.scrollTop=0; });
+  else Snd.ambStop();                        // ゲームに入ったら止める(注ぐ音の邪魔をしない)
 }
 function updateHud(){
   const c=CHARS[G.lvl.ch];
@@ -2728,7 +2810,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 /* ---------- イベント ---------- */
-function armAudio(){ Snd.init(); Snd.resume(); }
+function armAudio(){ Snd.init(); Snd.resume(); syncBgm(); }
 document.addEventListener('pointerdown',armAudio,{passive:true});
 
 el.pourBtn.addEventListener('pointerdown',e=>{
@@ -2803,11 +2885,19 @@ el.modeTiltBtn.addEventListener('click',async()=>{
     else if(waited>=2500){ Input.useSwipe=true; setTiltLabel(); clearInterval(iv); }
   },200);
 });
+function syncBgmBtn(){
+  el.bgmBtn.classList.toggle('on',!!Save.data.bgm);
+  el.bgmBtn.textContent=Save.data.bgm?'BGM ON':'BGM OFF';
+  el.bgmBtn.setAttribute('aria-pressed',String(!!Save.data.bgm));
+}
 function syncVoiceBtn(){
   el.voiceBtn.classList.toggle('on',!!Save.data.voice);
   el.voiceBtn.textContent=Save.data.voice?'声 ON':'声 OFF';
   el.voiceBtn.setAttribute('aria-pressed',String(!!Save.data.voice));
 }
+el.bgmBtn.addEventListener('click',()=>{
+  Save.data.bgm=!Save.data.bgm; Save.save(); syncBgmBtn(); Snd.ui(); syncBgm();
+});
 el.voiceBtn.addEventListener('click',()=>{
   Save.data.voice=!Save.data.voice; Save.save(); syncVoiceBtn(); setTiltLabel(); Snd.ui();
   if(Save.data.voice) Voice.speak('もう一杯！',CHARS.papa);
@@ -2818,7 +2908,7 @@ try{ if('scrollRestoration' in history) history.scrollRestoration='manual'; }cat
 addEventListener('load',()=>{ el.home.scrollTop=0; scrollTo(0,0); });
 el.home.scrollTop=0;
 
-syncVoiceBtn(); setTiltLabel();
+syncVoiceBtn(); syncBgmBtn(); setTiltLabel();
 
 /* 許可の要らない端末(Android等)では読み込み時点でセンサーを購読しておく。
    ボタンを押してから初回イベントを待つ作りだと、WebViewのように配信が遅い
@@ -2857,7 +2947,7 @@ el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv
   startLevel(G.lvl.lv+1,false); });
 el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); });
 el.toHome.addEventListener('click',()=>{
-  Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home');
+  Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home'); syncBgm();
   VoiceClips.stop(); try{speechSynthesis.cancel();}catch(e){} Voice._done=true;
   // 最初に選ばれているのは常にLEVEL 1。続きの番号を出すと、はじめて開いた人が
   // いきなり社長(LV9)から始めることになる。続きは番号を選び直せばよい
@@ -2874,7 +2964,7 @@ else G.selLevel=1;
 updateHome();
 requestAnimationFrame(()=>{ resize(); });
 new ResizeObserver(resize).observe(el.cv);
-window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag};
+window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
 </script>
 <!-- /APP -->
 </body>
