@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.26 — 電車だけ(音量+3.6dB)</div>
+    <div id="ver">prototype v3.27 — 液体の描き直し</div>
   </div>
 
   <!-- ゲーム -->
@@ -2393,6 +2393,26 @@ function resize(){
 window.addEventListener('resize',resize);
 
 const bubblesFx=[], drips=[];
+/* 泡のきめ。真っ白な板に見えるのが、写真の人物と並んだときいちばん浮く。
+   細かい泡の粒を1枚だけ作って敷き詰める(毎フレーム作ると重い) */
+let foamPat=null;
+function foamPattern(ctx){
+  if(foamPat) return foamPat;
+  const S=72, c=document.createElement('canvas'); c.width=c.height=S;
+  const g=c.getContext('2d');
+  for(let i=0;i<420;i++){
+    const r=0.5+Math.random()*Math.random()*2.6;
+    const x=Math.random()*S, y=Math.random()*S;
+    const a=0.05+Math.random()*0.16;
+    g.beginPath(); g.arc(x,y,r,0,Math.PI*2);
+    g.fillStyle= Math.random()<0.55 ? `rgba(255,255,252,${a})` : `rgba(176,158,128,${a*0.8})`;
+    g.fill();
+    if(x<r||y<r||x>S-r||y>S-r){            // 継ぎ目が出ないよう反対側にも置く
+      g.beginPath(); g.arc(x<r?x+S:x>S-r?x-S:x, y<r?y+S:y>S-r?y-S:y, r,0,Math.PI*2); g.fill();
+    }
+  }
+  return (foamPat=ctx.createPattern(c,'repeat'));
+}
 /* グラス内側の半幅(高さ位置tで補間: t=0が上端,1が底) */
 function innerHalfW(g,gw,t){
   const topHW=(gw/2)-gw*0.09;
@@ -2527,43 +2547,119 @@ function renderScene(now){
     sideTo(botY,topY,-1);
     ctx.closePath();};
 
-  // ビール(半透明: 指がグラス前面に写っていても透けて馴染む)
+  // ビール。人物と背景が写実なので、中身も液体として見えるところまで描く。
+  // 効いているのは4つ: たての濃度差、横の減光(ガラスの厚み)、底の反射、
+  // 液面のふち。半透明のままにして、指がグラス前面に写っても馴染ませる
   if(fillL>0.004){
     ctx.save(); clipGlass(); ctx.clip();
-    const grad=ctx.createLinearGradient(0,yL,0,botY);
-    grad.addColorStop(0,'rgba(244,176,66,0.72)'); grad.addColorStop(1,'rgba(178,106,20,0.78)');
-    ctx.fillStyle=grad;
     const ys=Math.min(yL+wob,botY);
-    ctx.beginPath();
-    surface(ys,+1);                    // 液面: 奥側の弧(上を通る)
-    sideTo(ys,botY,+1);                // 右の壁
-    surface(botY,-1);                  // 底: 手前側の弧(下を通る)
-    sideTo(botY,ys,-1);                // 左の壁
-    ctx.closePath(); ctx.fill();
-    // 上昇する気泡
-    ctx.fillStyle='rgba(255,235,190,0.5)';
-    for(let i=bubblesFx.length-1;i>=0;i--){
-      const bb=bubblesFx[i]; bb.y-=bb.v/60;
-      if(bb.y<yL+2){ bubblesFx.splice(i,1); continue; }
-      ctx.beginPath();ctx.arc(bb.x,bb.y,bb.r,0,Math.PI*2);ctx.fill();
+    const beerPath=()=>{ ctx.beginPath();
+      surface(ys,+1);                  // 液面: 奥側の弧(上を通る)
+      sideTo(ys,botY,+1);              // 右の壁
+      surface(botY,-1);                // 底: 手前側の弧(下を通る)
+      sideTo(botY,ys,-1);              // 左の壁
+      ctx.closePath(); };
+    // たての濃度差。上は光が抜けて明るく、底は液が厚くて濃い
+    const grad=ctx.createLinearGradient(0,ys,0,botY);
+    grad.addColorStop(0,   'rgba(248,184,74,0.62)');
+    grad.addColorStop(0.42,'rgba(226,146,36,0.70)');
+    grad.addColorStop(1,   'rgba(142,78,10,0.80)');
+    ctx.fillStyle=grad; beerPath(); ctx.fill();
+
+    // 横の減光。円筒のガラスは端ほど光の通る道が長く、濃く沈んで見える。
+    // 中ほどに抜けの明るい帯を1本入れると、板ではなく筒に見える
+    const wm=hwAt((ys+botY)/2);
+    const hg=ctx.createLinearGradient(wm.L,0,wm.R,0);
+    hg.addColorStop(0,   'rgba(62,30,2,0.42)');
+    hg.addColorStop(0.16,'rgba(62,30,2,0.06)');
+    hg.addColorStop(0.34,'rgba(255,224,160,0.07)');
+    hg.addColorStop(0.48,'rgba(255,228,168,0.10)');
+    hg.addColorStop(0.62,'rgba(255,224,160,0.04)');
+    hg.addColorStop(0.85,'rgba(62,30,2,0.08)');
+    hg.addColorStop(1,   'rgba(62,30,2,0.44)');
+    ctx.fillStyle=hg; beerPath(); ctx.fill();
+
+    // 底で反射した光。底板の少し上に明るい帯が出る
+    if(botY-ys>16){
+      const bg=ctx.createLinearGradient(0,botY-Math.min(26,(botY-ys)*0.4),0,botY);
+      bg.addColorStop(0,'rgba(255,214,132,0)');
+      bg.addColorStop(0.72,'rgba(255,214,132,0.16)');
+      bg.addColorStop(1,'rgba(120,64,8,0.22)');
+      ctx.fillStyle=bg; beerPath(); ctx.fill();
     }
-    if(Math.random()<0.35&&(botY-yL)>12){
-      const w0=hwAt(botY);
-      bubblesFx.push({x:w0.C+(Math.random()*2-1)*(w0.R-w0.L)*0.4,y:botY-3,r:0.8+Math.random()*1.4,v:12+Math.random()*20});
+
+    // 上昇する気泡。壁の傷から立つので、湧く場所は数か所に固まる
+    for(let i=bubblesFx.length-1;i>=0;i--){
+      const bb=bubblesFx[i];
+      bb.y-=bb.v/60; bb.t+=0.13;
+      if(bb.y<ys+2){ bubblesFx.splice(i,1); continue; }
+      const x=bb.x+Math.sin(bb.t)*bb.sw;
+      ctx.fillStyle=`rgba(255,244,214,${bb.a})`;
+      ctx.beginPath(); ctx.arc(x,bb.y,bb.r,0,Math.PI*2); ctx.fill();
+      if(bb.r>1.1){                                     // 大きい粒にだけ光を置く
+        ctx.fillStyle='rgba(255,255,255,0.42)';
+        ctx.beginPath(); ctx.arc(x-bb.r*0.28,bb.y-bb.r*0.32,bb.r*0.3,0,Math.PI*2); ctx.fill();
+      }
+    }
+    if(botY-ys>12){
+      const w0=hwAt(botY), half=(w0.R-w0.L)/2;
+      // 数を止めないと、1秒に100個以上たまって古い端末で重くなる
+      const n=(s.Q>0?3:1);
+      for(let k=0;k<n && bubblesFx.length<130;k++){
+        if(Math.random()>0.42) continue;
+        const seat=[-0.52,-0.3,-0.06,0.2,0.44,0.6][Math.floor(Math.random()*6)];
+        bubblesFx.push({x:w0.C+seat*half+(Math.random()*2-1)*half*0.05, y:botY-3,
+          r:0.45+Math.random()*Math.random()*1.15, v:16+Math.random()*30,
+          a:0.26+Math.random()*0.26, t:Math.random()*6.3, sw:0.4+Math.random()*0.9});
+      }
+    }
+    // 液面のふち。表面張力でグラスに触れる縁が明るく光る
+    if(fillP<0.01){
+      const w=hwAt(ys), ry=Math.max(ryAt(ys),0.1);
+      ctx.strokeStyle='rgba(255,236,186,0.42)'; ctx.lineWidth=1.4;
+      ctx.beginPath();
+      ctx.ellipse(w.C,ys,Math.max((w.R-w.L)/2,0.1),ry,0,0,Math.PI*2); ctx.stroke();
     }
     ctx.restore();
   }
-  // 泡
+  // 泡。平らな白い板が、写真の人物と並んだときいちばん浮く。
+  // きめ・上面の丸み・液との境目の3つを足して、クリームに見せる
   if(fillP>0.004){
     ctx.save(); clipGlass(); ctx.clip();
-    ctx.fillStyle='rgba(248,241,225,0.95)';
     const yTop=Math.max(yP,topY);
-    ctx.beginPath();
-    surface(yTop,+1);                  // 泡の上面
-    sideTo(yTop,yL,+1);
-    surface(yL,-1);                    // 泡とビールの境目
-    sideTo(yL,yTop,-1);
-    ctx.closePath(); ctx.fill();
+    const foamPath=()=>{ ctx.beginPath();
+      surface(yTop,+1);                // 泡の上面
+      sideTo(yTop,yL,+1);
+      surface(yL,-1);                  // 泡とビールの境目
+      sideTo(yL,yTop,-1);
+      ctx.closePath(); };
+    const fg=ctx.createLinearGradient(0,yTop,0,yL);
+    fg.addColorStop(0,   'rgba(255,252,243,0.97)');
+    fg.addColorStop(0.38,'rgba(247,236,216,0.96)');
+    fg.addColorStop(1,   'rgba(212,190,156,0.95)');   // 液に接する側は影になる
+    ctx.fillStyle=fg; foamPath(); ctx.fill();
+    // 泡の粒
+    ctx.save(); foamPath(); ctx.clip();
+    ctx.fillStyle=foamPattern(ctx);
+    ctx.fillRect(hwAt(yTop).L-4,yTop-2,(hwAt(yTop).R-hwAt(yTop).L)+8,(yL-yTop)+4);
+    ctx.restore();
+    // 横の減光。泡もガラスの端では濃く見える
+    const wf=hwAt((yTop+yL)/2);
+    const hf=ctx.createLinearGradient(wf.L,0,wf.R,0);
+    hf.addColorStop(0,   'rgba(120,104,82,0.26)');
+    hf.addColorStop(0.18,'rgba(120,104,82,0.02)');
+    hf.addColorStop(0.5, 'rgba(255,255,255,0.10)');
+    hf.addColorStop(0.84,'rgba(120,104,82,0.03)');
+    hf.addColorStop(1,   'rgba(120,104,82,0.28)');
+    ctx.fillStyle=hf; foamPath(); ctx.fill();
+    // 上面の丸み。手前の縁は下から見上げるぶん少し暗い
+    const w=hwAt(yTop), ry=Math.max(ryAt(yTop),0.1);
+    ctx.beginPath(); ctx.ellipse(w.C,yTop,Math.max((w.R-w.L)/2,0.1),ry,0,0,Math.PI*2);
+    const dg=ctx.createLinearGradient(0,yTop-ry,0,yTop+ry);
+    dg.addColorStop(0,'rgba(255,255,255,0.30)');
+    dg.addColorStop(0.55,'rgba(255,252,244,0.06)');
+    dg.addColorStop(1,'rgba(186,168,142,0.26)');
+    ctx.fillStyle=dg; ctx.fill();
     ctx.restore();
   }
   const F=(s.L+s.P)/s.C;
@@ -2654,13 +2750,27 @@ function renderScene(now){
     const lx = bx;
     const sw=2+nf*7;
     const sp=bottleSpout(bx, rimY, nf);
-    ctx.fillStyle='rgba(240,169,60,0.92)';
+    // 落ちるほど速くなるので、すじは下へ行くほど細くなる
+    const swT=sw, swB=sw*0.74;
+    const stream=()=>{ ctx.beginPath();
+      ctx.moveTo(sp.x-swT*0.45, sp.y);
+      ctx.quadraticCurveTo(lx-swT/2, (sp.y+landY)*0.5, lx-swB/2, landY);
+      ctx.lineTo(lx+swB/2, landY);
+      ctx.quadraticCurveTo(lx+swT/2+nf*2, (sp.y+landY)*0.5, sp.x+swT*0.55, sp.y);
+      ctx.closePath(); };
+    // 一色で塗ると平たいリボンに見える。筒なので、端が濃く芯が光る
+    const sg=ctx.createLinearGradient(lx-sw*0.9,0,lx+sw*0.9,0);
+    sg.addColorStop(0,   'rgba(168,96,14,0.86)');
+    sg.addColorStop(0.26,'rgba(244,180,72,0.95)');
+    sg.addColorStop(0.44,'rgba(255,228,164,0.96)');
+    sg.addColorStop(0.70,'rgba(230,152,40,0.94)');
+    sg.addColorStop(1,   'rgba(146,82,12,0.88)');
+    ctx.fillStyle=sg; stream(); ctx.fill();
+    // 落ち口。液が液を叩くところは白く泡立つ
+    ctx.fillStyle='rgba(255,250,238,0.5)';
     ctx.beginPath();
-    ctx.moveTo(sp.x-sw*0.45, sp.y);
-    ctx.quadraticCurveTo(lx-sw/2, (sp.y+landY)*0.5, lx-sw/2, landY);
-    ctx.lineTo(lx+sw/2, landY);
-    ctx.quadraticCurveTo(lx+sw/2+nf*2, (sp.y+landY)*0.5, sp.x+sw*0.55, sp.y);
-    ctx.closePath(); ctx.fill();
+    ctx.ellipse(lx, landY, sw*1.5+Math.sin(now/70)*1.4, 2.2+nf*1.5, 0, 0, Math.PI*2);
+    ctx.fill();
     if(missing>0.05){
       // 入っていないことは、縁で弾けるしぶきで見せる。滴を飛ばすと
       // グラスの外に点が散らばって、描き損じに見える
