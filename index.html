@@ -399,7 +399,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.19 — 縁ぴったり・指輪なし</div>
+    <div id="ver">prototype v3.20 — 店の空気</div>
   </div>
 
   <!-- ゲーム -->
@@ -1340,69 +1340,153 @@ const Voice = {
 };
 try{ speechSynthesis.onvoiceschanged=()=>Voice.pick(); }catch(e){}
 
-/* ホーム画面の店の空気。曲は流さない: 18人の場所(家・居酒屋・路地裏・炉端)が
-   バラバラなので旋律を1本通すとどこかで必ず浮く。遠いざわめき・低い空調・
-   時おりのグラスと柔らかい和音だけを合成で作る(音源ファイルは持たない) */
+/* ホーム画面の店の空気。音源ファイルは持たず、その場で合成する(0MB)。
+   狙いはタイトル画の居酒屋そのもの: 遠いざわめき、炭のはぜる音、皿とグラス、
+   たまに誰かの笑い声。そこへ三味線に近い撥弦を数秒に1音だけ置く。
+   旋律を通さないのは、鳴らすのがホーム画面だけでも、はっきりした曲にすると
+   「はじめる」を押すたびに途切れて耳につくため */
 Object.assign(Snd, {
+  /* ざわめき用のノイズ。白のままだと高い方が刺さって「サー」と鳴るので、
+     ピンクに寄せた別のバッファを1本だけ作る(注ぎの音は白のまま) */
+  pink(){
+    if(this.pinkBuf) return this.pinkBuf;
+    const sr=this.ctx.sampleRate, n=sr*3;
+    const b=this.ctx.createBuffer(1,n,sr), d=b.getChannelData(0);
+    let b0=0,b1=0,b2=0;
+    for(let i=0;i<n;i++){
+      const w=Math.random()*2-1;
+      b0=0.99765*b0+w*0.0990460; b1=0.96300*b1+w*0.2965164; b2=0.57000*b2+w*1.0526913;
+      d[i]=(b0+b1+b2+w*0.1848)*0.22;
+    }
+    return (this.pinkBuf=b);
+  },
   ambStart(){
     if(!this.ctx || this.amb) return;
     const ctx=this.ctx, out=ctx.createGain(); out.gain.value=0;
     out.connect(this.master);
-    const noise=()=>{ const s=ctx.createBufferSource(); s.buffer=this.noiseBuf; s.loop=true; s.start(); return s; };
-    // 遠いざわめき(人の声の帯だけ残したノイズをゆっくり揺らす)
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=620; bp.Q.value=0.55;
-    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500;
-    const gMur=ctx.createGain(); gMur.gain.value=0.05;
-    noise().connect(bp).connect(lp).connect(gMur).connect(out);
-    const lfo=ctx.createOscillator(); lfo.frequency.value=0.08;
-    const lfoG=ctx.createGain(); lfoG.gain.value=0.018;
-    lfo.connect(lfoG).connect(gMur.gain); lfo.start();
-    // 低い空調のうなり
-    const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=110;
-    const gRum=ctx.createGain(); gRum.gain.value=0.05;
-    noise().connect(rum).connect(gRum).connect(out);
-    const a={out, timer:null, t:0}; this.amb=a;
+    const a={out, timer:null, i:2}; this.amb=a;
+
+    const pn=()=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true; s.start(); return s; };
+    const pan=v=>{ const p=ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+                   if(p) p.pan.value=v; return p; };
+    const to=(node,dest)=>{ const p=pan(Math.random()*1.2-0.6); return p? node.connect(p).connect(dest) : node.connect(dest); };
+
+    /* ざわめき: 声の帯を3本に分け、それぞれ別々にゆっくり揺らす。
+       1本だけだと「サー」と平らに鳴って、人がいるように聞こえない */
+    for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.75],[1450,1.1,0.3]]){
+      const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
+      const g=ctx.createGain(); g.gain.value=0.055*v*0.9;
+      to(pn().connect(bp).connect(lp).connect(g), out);
+      const lfo=ctx.createOscillator(); lfo.frequency.value=0.05+Math.random()*0.09;
+      const lg=ctx.createGain(); lg.gain.value=0.055*v*0.45;
+      lfo.connect(lg).connect(g.gain); lfo.start();
+    }
+    /* 部屋の低いうなり */
+    const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=120;
+    const gr=ctx.createGain(); gr.gain.value=0.06;
+    pn().connect(rum).connect(gr).connect(out);
+    /* 炭の遠い炎 */
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3400;
+    const gs=ctx.createGain(); gs.gain.value=0.006;
+    pn().connect(hp).connect(gs).connect(out);
+
     out.gain.setTargetAtTime(0.9, ctx.currentTime, 1.2);      // ゆっくり立ち上げる
-    // 和音とグラスの音。数秒おきにどちらか1つだけ
-    const scale=[196.00,220.00,261.63,293.66,329.63,392.00];  // 柔らかい5音音階
-    let i=0;
+
+    const SCALE=[110.00,130.81,146.83,164.81,196.00,220.00,261.63,293.66];  // ヨナ抜き短音階
+    const STEP=[-2,-1,1,2,3];
     const tick=()=>{
       if(this.amb!==a) return;
-      a.t++;
-      if(a.t%2===0){
-        const f=scale[(i=(i+2+Math.floor(Math.random()*3))%scale.length)];
-        this.ambTone(f,0.030);
-        if(Math.random()<0.5) setTimeout(()=>{ if(this.amb===a) this.ambTone(f*1.5,0.018); },520);
-      } else if(Math.random()<0.45){
-        this.ambClink();
+      const r=Math.random();
+      if(r<0.34){
+        a.i=(a.i+STEP[Math.floor(Math.random()*STEP.length)]+SCALE.length)%SCALE.length;
+        this.ambPluck(SCALE[a.i],0.085);
       }
-      a.timer=setTimeout(tick, 3200+Math.random()*2600);
+      else if(r<0.52) this.ambClink();
+      else if(r<0.66) this.ambTap();
+      else if(r<0.80) this.ambLaugh();
+      else {
+        const n=3+Math.floor(Math.random()*4);
+        for(let k=0;k<n;k++) setTimeout(()=>{ if(this.amb===a) this.ambCrackle(); }, k*(40+Math.random()*220));
+      }
+      a.timer=setTimeout(tick, 2600+Math.random()*3200);
     };
     a.timer=setTimeout(tick, 1400);
   },
-  /* 柔らかい和音(木の打楽器に近い音) */
-  ambTone(f,vol){
+  /* 撥弦(カープラス・ストロング)。短いノイズを弦の長さぶんの輪に入れて回し、
+     1周ごとに少しずつなまらせる。サイン波の和音より弦らしく、電子音に聞こえない */
+  ambPluck(f,vol){
+    const ctx=this.ctx, sr=ctx.sampleRate, dur=3.4;
+    const n=Math.round(sr*dur), N=Math.max(2,Math.round(sr/f));
+    const buf=ctx.createBuffer(1,n,sr), d=buf.getChannelData(0), ring=new Float32Array(N);
+    for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+    let lp=0;
+    for(let i=0,p=0;i<n;i++){
+      const cur=ring[p];
+      d[i]=cur;
+      lp+=0.48*(0.5*(cur+ring[(p+1)%N])-lp);
+      ring[p]=lp*0.9965;
+      p=(p+1)%N;
+    }
+    const at=Math.round(sr*0.004);
+    for(let i=0;i<at;i++) d[i]*=i/at;
+    const rel=Math.round(sr*0.25);
+    for(let i=0;i<rel;i++) d[n-1-i]*=i/rel;
+    const s=ctx.createBufferSource(); s.buffer=buf;
+    const body=ctx.createBiquadFilter(); body.type='bandpass'; body.frequency.value=f*3.2; body.Q.value=0.7;
+    const hi=ctx.createBiquadFilter(); hi.type='lowpass'; hi.frequency.value=2600;
+    const g=ctx.createGain(); g.gain.value=vol;
+    s.connect(body).connect(hi).connect(g).connect(this.amb?this.amb.out:this.master);
+    s.start();
+  },
+  /* 遠くでグラスが触れる */
+  ambClink(){
     const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+2.4);
-    g.connect(this.amb?this.amb.out:this.master);
-    for(const [m,v] of [[1,1],[2.0,0.25],[3.01,0.08]]){
+    g.gain.setValueAtTime(0.014,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200;
+    g.connect(lp).connect(this.amb?this.amb.out:this.master);
+    const f=1500+Math.random()*1100;
+    for(const [m,v] of [[1,1],[2.71,0.35],[5.4,0.12]]){     // 整数倍でない=金属やガラスらしい濁り
       const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
-      const gg=ctx.createGain(); gg.gain.value=v; o.connect(gg).connect(g); o.start(t); o.stop(t+2.5);
+      const gg=ctx.createGain(); gg.gain.value=v; o.connect(gg).connect(g); o.start(t); o.stop(t+0.65);
     }
   },
-  /* 遠くでグラスが触れる音 */
-  ambClink(){
-    const ctx=this.ctx, t=ctx.currentTime;
-    const g=ctx.createGain(); g.gain.setValueAtTime(0.012,t);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
-    g.connect(this.amb?this.amb.out:this.master);
-    const f=1800+Math.random()*900;
-    for(const m of [1,1.52]){
-      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
-      const gg=ctx.createGain(); gg.gain.value=m===1?1:0.4;
-      o.connect(gg).connect(g); o.start(t); o.stop(t+0.55);
-    }
+  /* 皿や丼を置く */
+  ambTap(){
+    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
+    g.gain.setValueAtTime(0.012,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=420+Math.random()*480; bp.Q.value=3;
+    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+    s.connect(bp).connect(g).connect(this.amb?this.amb.out:this.master);
+    s.start(t); s.stop(t+0.3);
+  },
+  /* 遠くで誰かが笑う。声の帯だけ持ち上げ、細かく震わせてゆっくり膨らませる */
+  ambLaugh(){
+    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.020,t+0.5+Math.random()*0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.8+Math.random()*1.0);
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=500+Math.random()*320; bp.Q.value=1.6;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1700;
+    const trem=ctx.createGain(); trem.gain.value=1;
+    const lfo=ctx.createOscillator(); lfo.frequency.value=4.5+Math.random()*2.5;
+    const lg=ctx.createGain(); lg.gain.value=0.45;
+    lfo.connect(lg).connect(trem.gain); lfo.start(t); lfo.stop(t+3);
+    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+    s.connect(bp).connect(lp).connect(trem).connect(g).connect(this.amb?this.amb.out:this.master);
+    s.start(t); s.stop(t+3.2);
+  },
+  /* 炭がはぜる */
+  ambCrackle(){
+    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
+    g.gain.setValueAtTime(0.006+Math.random()*0.010,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2200;
+    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
+    s.connect(hp).connect(g).connect(this.amb?this.amb.out:this.master);
+    s.start(t); s.stop(t+0.08);
   },
   ambStop(){
     const a=this.amb; if(!a) return;
