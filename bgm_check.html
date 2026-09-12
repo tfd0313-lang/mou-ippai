@@ -31,7 +31,11 @@ input[type=range]{flex:1;accent-color:var(--amber)}
 <div class="desc">ざわめき＋低いうなり＋サイン波の和音。和音が電子音に聞こえるのが弱点。</div>
 <button data-k="now">再生</button></div>
 
-<div class="card"><h2>D 夜風と注ぐ音　← いま本体に入っているもの</h2>
+<div class="card"><h2>E 高架下　← いま本体に入っているもの</h2>
+<div class="desc">新橋の高架下。20〜35秒に1本、頭上を電車が通る。注ぐ音、ざわめき、笑い声。</div>
+<button data-k="e">再生</button></div>
+
+<div class="card"><h2>D 夜風と注ぐ音</h2>
 <div class="desc">夜風を土台に、トクトクトクと注ぐ音、遠いざわめきと笑い声。旋律なし。</div>
 <button data-k="d">再生</button></div>
 
@@ -324,7 +328,116 @@ function buildD(out){
     tap(out,0.011); return 2600+Math.random()*3000;
   };
 }
-const BUILD={now:buildNow,a:buildA,b:buildB,c:buildC,d:buildD};
+function buildE(out){
+  const pn=()=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true; s.start(); return s; };
+  const osc=(hz,amt,target)=>{ const o=ctx.createOscillator(); o.frequency.value=hz;
+    const g=ctx.createGain(); g.gain.value=amt; o.connect(g).connect(target); o.start(); };
+  const src=(t,d)=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.start(t); s.stop(t+d); return s; };
+  /* ガード下の低いうなり */
+  const city=ctx.createBiquadFilter(); city.type='lowpass'; city.frequency.value=150;
+  const gC=ctx.createGain(); gC.gain.value=0.055;
+  pn().connect(city).connect(gC).connect(out);
+  osc(0.021,0.016,gC.gain);
+  /* 店のざわめき */
+  for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.75],[1450,1.1,0.30]]){
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
+    const g=ctx.createGain(); g.gain.value=0.042*v;
+    pn().connect(bp).connect(lp).connect(g).connect(out);
+    osc(0.05+Math.random()*0.09,0.042*v*0.45,g.gain);
+  }
+  const glug=t=>{
+    const d=0.11+Math.random()*0.06, f0=105+Math.random()*40;
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(f0*1.5,t);
+    o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.030,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0006,t+d);
+    o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
+    const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
+    const bg=ctx.createGain(); bg.gain.setValueAtTime(0.018,t);
+    bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
+    src(t,0.12).connect(bf).connect(bg).connect(out);
+  };
+  const fizz=t=>{
+    const d=0.006+Math.random()*0.014;
+    const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.playbackRate.value=1.4+Math.random()*1.4;
+    const f=ctx.createBiquadFilter(); f.type='bandpass';
+    f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.010+Math.random()*0.016,t);
+    g.gain.exponentialRampToValueAtTime(0.0004,t+d);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
+  };
+  const pour=()=>{
+    const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
+    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=1250; sf.Q.value=0.5;
+    const sg=ctx.createGain();
+    sg.gain.setValueAtTime(0.0001,t0);
+    sg.gain.exponentialRampToValueAtTime(0.012,t0+0.14);
+    sg.gain.setValueAtTime(0.012,t0+dur-0.1);
+    sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
+    src(t0,dur+0.4).connect(sf).connect(sg).connect(out);
+    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=7;
+    cf.frequency.setValueAtTime(190,t0);
+    cf.frequency.linearRampToValueAtTime(640,t0+dur);
+    const cg=ctx.createGain();
+    cg.gain.setValueAtTime(0.0001,t0);
+    cg.gain.exponentialRampToValueAtTime(0.034,t0+0.16);
+    cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
+    src(t0,dur+0.4).connect(cf).connect(cg).connect(out);
+    for(let t=t0+0.06;t<t0+dur;t+=0.15+Math.random()*0.10) glug(t);
+    for(let k=0;k<14;k++) fizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
+  };
+  const clack=(t,v)=>{
+    const g=ctx.createGain(); g.gain.setValueAtTime(v,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=110+Math.random()*70; bp.Q.value=2.2;
+    src(t,0.18).connect(bp).connect(g).connect(out);
+    const g2=ctx.createGain(); g2.gain.setValueAtTime(v*0.45,t);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    const bp2=ctx.createBiquadFilter(); bp2.type='bandpass';
+    bp2.frequency.value=900+Math.random()*800; bp2.Q.value=1.5;
+    src(t,0.07).connect(bp2).connect(g2).connect(out);
+  };
+  const train=()=>{
+    const t0=ctx.currentTime+0.1, dur=12+Math.random()*4;
+    const env=x=> x<0.32 ? x/0.32 : x<0.58 ? 1 : Math.max(0,(1-x)/0.42);
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=260;
+    const pk=ctx.createBiquadFilter(); pk.type='peaking';
+    pk.frequency.value=95; pk.Q.value=1.2; pk.gain.value=9;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(0.155,t0+dur*0.32);
+    g.gain.setValueAtTime(0.155,t0+dur*0.58);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    src(t0,dur+0.3).connect(lp).connect(pk).connect(g).connect(out);
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2200; bp.Q.value=1.1;
+    const g2=ctx.createGain();
+    g2.gain.setValueAtTime(0.0001,t0);
+    g2.gain.exponentialRampToValueAtTime(0.018,t0+dur*0.42);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t0+dur*0.95);
+    src(t0,dur+0.3).connect(bp).connect(g2).connect(out);
+    for(let t=t0+dur*0.06;t<t0+dur*0.94;t+=1.22){
+      const v=0.075*env((t-t0)/dur);
+      if(v<=0.002) continue;
+      clack(t,v); clack(t+0.085,v*0.75); clack(t+0.60,v*0.9); clack(t+0.685,v*0.68);
+    }
+    trainTimer=setTimeout(()=>{ if(live && live.out===out) train(); }, (dur+8+Math.random()*14)*1000);
+  };
+  let trainTimer=setTimeout(()=>{ if(live && live.out===out) train(); }, 2500+Math.random()*4000);
+  return ()=>{
+    const r=Math.random();
+    if(r<0.34){ pour(); return 6500+Math.random()*4000; }
+    if(r<0.64){ laugh(out,0.021); return 3000+Math.random()*2500; }
+    if(r<0.88){ clink(out,0.013); return 2600+Math.random()*2600; }
+    tap(out,0.011); return 2600+Math.random()*2600;
+  };
+}
+const BUILD={now:buildNow,a:buildA,b:buildB,c:buildC,d:buildD,e:buildE};
 
 function stop(){
   if(!live) return;
@@ -339,7 +452,7 @@ function play(k,btn){
   stop();
   const out=ctx.createGain(); out.gain.value=0; out.connect(master);
   const step=BUILD[k](out);
-  const lvl = k==='d' ? 0.45 : 1;      // Dは本体と同じ「背景の大きさ」で鳴らす
+  const lvl = (k==='d'||k==='e') ? 0.45 : 1;   // D・Eは本体と同じ「背景の大きさ」で鳴らす
   const l={out,timer:null}; live=l;
   out.gain.setTargetAtTime(lvl,ctx.currentTime,0.8);
   const tick=()=>{ if(live!==l) return; const d=step(); l.timer=setTimeout(tick,d); };
