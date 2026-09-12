@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.24 — 高架下の絵</div>
+    <div id="ver">prototype v3.25 — 電車だけ</div>
   </div>
 
   <!-- ゲーム -->
@@ -1360,12 +1360,14 @@ const Voice = {
 };
 try{ speechSynthesis.onvoiceschanged=()=>Voice.pick(); }catch(e){}
 
-/* ホーム画面の店の空気。音源ファイルは持たず、その場で合成する(0MB)。
-   場所は新橋の高架下の飲み屋(オーナー指定)。旋律は置かない。鳴るのは
-   ①頭上を通る電車 ②トクトクトクと注ぐ音 ③賑やかな会話や笑い声、の3つ。
-   注ぐ音はゲーム中の注ぎと同じ作り方(空気柱の共鳴+ゴボッ)をそのまま使う */
+/* ホーム画面の音。音源ファイルは持たず、その場で合成する(0MB)。
+   鳴らすのは頭上を通る電車だけ(オーナー指定)。店のざわめき・笑い声・
+   グラス・注ぐ音は入れない。
+   新橋の高架下は何本もの線が重なっていて、電車の音はほとんど途切れない。
+   なので次の1本までを3〜9秒しか空けず、長さ・重さ・継ぎ目の間隔を毎回
+   変えて、別の電車が来たように聞かせる */
 Object.assign(Snd, {
-  /* ざわめきと風に使うノイズ。白のままだと高い方が刺さって「サー」と鳴るので、
+  /* 電車に使うノイズ。白のままだと高い方が刺さって「サー」と鳴るので、
      ピンクに寄せた別のバッファを1本だけ作る(注ぎの効果音は白のまま) */
   pink(){
     if(this.pinkBuf) return this.pinkBuf;
@@ -1383,91 +1385,56 @@ Object.assign(Snd, {
     if(!this.ctx || this.amb) return;
     const ctx=this.ctx, out=ctx.createGain(); out.gain.value=0;
     out.connect(this.master);
-    const a={out, timer:null, tTimer:null}; this.amb=a;
-    const pn=()=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true; s.start(); return s; };
-    const lfo=(hz,amt,target)=>{
-      const o=ctx.createOscillator(); o.frequency.value=hz;
-      const g=ctx.createGain(); g.gain.value=amt;
-      o.connect(g).connect(target); o.start(); return o;
-    };
-
-    /* ガード下の低いうなり。街と高架の躯体が鳴っている */
-    const city=ctx.createBiquadFilter(); city.type='lowpass'; city.frequency.value=150;
-    const gC=ctx.createGain(); gC.gain.value=0.028;
-    pn().connect(city).connect(gC).connect(out);
-    lfo(0.021,0.009,gC.gain);
-
-    /* ③ 店のざわめき。声の帯を3本に分け、別々にゆっくり揺らす。
-       1本だと平らに鳴って、人がいるように聞こえない */
-    for(const [f,q,v] of [[300,0.7,1.0],[760,0.8,0.75],[1450,1.1,0.30]]){
-      const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q;
-      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
-      const g=ctx.createGain(); g.gain.value=0.024*v;
-      pn().connect(bp).connect(lp).connect(g).connect(out);
-      lfo(0.05+Math.random()*0.09, 0.024*v*0.45, g.gain);
-    }
-
-    /* 部屋の低いうなり */
-    const rum=ctx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=120;
-    const gr=ctx.createGain(); gr.gain.value=0.045;
-    pn().connect(rum).connect(gr).connect(out);
-
-    // 背景なので小さく。中の釣り合いはそのままに、全体を一段下げる
-    out.gain.setTargetAtTime(0.45, ctx.currentTime, 1.2);     // ゆっくり立ち上げる
-
-    /* ② 注ぐ音を主役に、笑い声とグラスをときどき挟む */
-    const tick=()=>{
-      if(this.amb!==a) return;
-      const r=Math.random();
-      let wait;
-      if(r<0.34){ this.ambPour(); wait=6500+Math.random()*4000; }
-      else if(r<0.64){ this.ambLaugh(); wait=3000+Math.random()*2500; }
-      else if(r<0.88){ this.ambClink(); wait=2600+Math.random()*2600; }
-      else { this.ambTap(); wait=2600+Math.random()*2600; }
-      a.timer=setTimeout(tick, wait);
-    };
-    a.timer=setTimeout(tick, 1800);
-    /* ① 頭上の電車。20〜35秒に1本 */
+    const a={out, tTimer:null}; this.amb=a;
+    out.gain.setTargetAtTime(0.45, ctx.currentTime, 1.2);   // ゆっくり立ち上げる
     const train=()=>{
       if(this.amb!==a) return;
       const dur=this.ambTrain();
-      if(this.onAmbTrain) this.onAmbTrain(dur);        // 画面側へ知らせる
-      a.tTimer=setTimeout(train, (dur+8+Math.random()*14)*1000);
+      if(this.onAmbTrain) this.onAmbTrain(dur);             // 画面側へ知らせる
+      a.tTimer=setTimeout(train, (dur+2+Math.random()*4)*1000);
     };
-    a.tTimer=setTimeout(train, 2500+Math.random()*6000);
+    a.tTimer=setTimeout(train, 900);
   },
-  /* ① 頭上を通る電車。高架の下で聞くと、桁が鳴って低い轟音になり、
+  /* 頭上を通る電車。高架の下で聞くと、桁が鳴って低い轟音になり、
      レールの継ぎ目を越える打撃が「ガタン ゴトン」と乗る。近づいて遠ざかる
-     ぶんは、轟音・擦れ・打撃の3つをまとめて同じ山なりで大きさを変えて出す */
+     ぶんは、轟音・擦れ・打撃の3つをまとめて同じ山なりで大きさを変えて出す。
+     3回に1回は遠い線を通す(小さく、高い方を削る)。同じ音の繰り返しに
+     聞こえないようにするため */
   ambTrain(){
     const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
-    const t0=ctx.currentTime+0.1, dur=12+Math.random()*4;
+    const far=Math.random()<0.34;
+    const t0=ctx.currentTime+0.1;
+    const dur=(far?10:12)+Math.random()*4;
+    const loud=(far?0.115:0.250)+Math.random()*0.055;
+    const joint=1.05+Math.random()*0.45;                    // 継ぎ目の間隔=速さ
     const src=(t,d)=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
                        s.start(t); s.stop(t+d); return s; };
     /* 桁の轟音。低い方だけ通し、95Hz あたりを持ち上げて躯体の鳴りにする */
-    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=260;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=far?170:260;
     const pk=ctx.createBiquadFilter(); pk.type='peaking';
-    pk.frequency.value=95; pk.Q.value=1.2; pk.gain.value=9;
+    pk.frequency.value=80+Math.random()*30; pk.Q.value=1.2; pk.gain.value=9;
     const g=ctx.createGain();
-    g.gain.setValueAtTime(0.0001,t0);
-    g.gain.exponentialRampToValueAtTime(0.290,t0+dur*0.32);
-    g.gain.setValueAtTime(0.290,t0+dur*0.58);
-    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    g.gain.setValueAtTime(loud*0.02,t0);
+    g.gain.exponentialRampToValueAtTime(loud,t0+dur*0.28);
+    g.gain.setValueAtTime(loud,t0+dur*0.66);
+    g.gain.exponentialRampToValueAtTime(loud*0.015,t0+dur);
     src(t0,dur+0.3).connect(lp).connect(pk).connect(g).connect(out);
     /* 車輪とレールの擦れ。真上に来たときだけ聞こえる */
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2200; bp.Q.value=1.1;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.value=1900+Math.random()*700; bp.Q.value=1.1;
     const g2=ctx.createGain();
     g2.gain.setValueAtTime(0.0001,t0);
-    g2.gain.exponentialRampToValueAtTime(0.030,t0+dur*0.42);
+    g2.gain.exponentialRampToValueAtTime(far?0.008:0.030,t0+dur*0.42);
     g2.gain.exponentialRampToValueAtTime(0.0001,t0+dur*0.95);
     src(t0,dur+0.3).connect(bp).connect(g2).connect(out);
     /* ガタン ゴトン。台車は前後2つあるので、2打1組が少し離れて2回続く */
-    const env=x=> x<0.32 ? x/0.32 : x<0.58 ? 1 : Math.max(0,(1-x)/0.42);
-    for(let t=t0+dur*0.06; t<t0+dur*0.94; t+=1.22){
-      const v=0.115*env((t-t0)/dur);
+    const env=x=> x<0.28 ? x/0.28 : x<0.66 ? 1 : Math.max(0,(1-x)/0.34);
+    const hit=(far?0.045:0.115);
+    for(let t=t0+dur*0.06; t<t0+dur*0.94; t+=joint){
+      const v=hit*env((t-t0)/dur);
       if(v<=0.002) continue;
       this.ambClack(t,v); this.ambClack(t+0.085,v*0.75);
-      this.ambClack(t+0.60,v*0.9); this.ambClack(t+0.685,v*0.68);
+      this.ambClack(t+joint*0.49,v*0.9); this.ambClack(t+joint*0.49+0.085,v*0.68);
     }
     return dur;
   },
@@ -1487,108 +1454,9 @@ Object.assign(Snd, {
     bp2.frequency.value=900+Math.random()*800; bp2.Q.value=1.5;
     src(t,0.07).connect(bp2).connect(g2).connect(out);
   },
-  /* ② トクトクトク。ゲーム中の注ぎと同じ作りを、遠くで小さく鳴らす。
-     細い流れ + グラスの空気柱(液面が上がるほど高くなる) + 瓶口のゴボッ */
-  ambPour(){
-    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
-    const t0=ctx.currentTime+0.05, dur=1.2+Math.random()*1.1;
-    const src=()=>{ const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-                    s.start(t0); s.stop(t0+dur+0.4); return s; };
-    const sf=ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=2200; sf.Q.value=1.2;
-    const sg=ctx.createGain();
-    sg.gain.setValueAtTime(0.0001,t0);
-    sg.gain.exponentialRampToValueAtTime(0.005,t0+0.14);
-    sg.gain.setValueAtTime(0.005,t0+dur-0.1);
-    sg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.18);
-    src().connect(sf).connect(sg).connect(out);
-
-    const cf=ctx.createBiquadFilter(); cf.type='bandpass'; cf.Q.value=9;
-    cf.frequency.setValueAtTime(300,t0);
-    cf.frequency.linearRampToValueAtTime(900,t0+dur);      // 満ちていく=音が上がる
-    const cg=ctx.createGain();
-    cg.gain.setValueAtTime(0.0001,t0);
-    cg.gain.exponentialRampToValueAtTime(0.020,t0+0.16);
-    cg.gain.exponentialRampToValueAtTime(0.0001,t0+dur+0.2);
-    src().connect(cf).connect(cg).connect(out);
-
-    for(let t=t0+0.06; t<t0+dur; t+=0.15+Math.random()*0.10) this.ambGlug(t);
-    /* 泡のはじける余韻 */
-    for(let k=0;k<8;k++) this.ambFizz(t0+dur*0.5+Math.random()*(dur*0.5+0.9));
-  },
-  /* 瓶口から空気が入る「トク」。離散のパルスで鳴らす */
-  ambGlug(t){
-    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
-    const d=0.11+Math.random()*0.06, f0=132+Math.random()*48;
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.type='sine';
-    o.frequency.setValueAtTime(f0*1.5,t);
-    o.frequency.exponentialRampToValueAtTime(f0,t+d*0.8);
-    g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.050,t+0.012);
-    g.gain.exponentialRampToValueAtTime(0.0006,t+d);
-    o.connect(g).connect(out); o.start(t); o.stop(t+d+0.03);
-    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-    const bf=ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
-    const bg=ctx.createGain();
-    bg.gain.setValueAtTime(0.022,t); bg.gain.exponentialRampToValueAtTime(0.0005,t+0.09);
-    s.connect(bf).connect(bg).connect(out); s.start(t); s.stop(t+0.12);
-  },
-  /* 泡の炭酸がはじける、ごく短い音 */
-  ambFizz(t){
-    const ctx=this.ctx, out=this.amb?this.amb.out:this.master;
-    const d=0.006+Math.random()*0.014;
-    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-    s.playbackRate.value=1.4+Math.random()*1.4;
-    const f=ctx.createBiquadFilter(); f.type='bandpass';
-    f.frequency.value=3600+Math.random()*4200; f.Q.value=3+Math.random()*4;
-    const g=ctx.createGain();
-    g.gain.setValueAtTime(0.006+Math.random()*0.010,t);
-    g.gain.exponentialRampToValueAtTime(0.0004,t+d);
-    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t+d+0.02);
-  },
-  /* 遠くでグラスが触れる。整数倍でない部分音=ガラスらしい濁り */
-  ambClink(){
-    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.013,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
-    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200;
-    g.connect(lp).connect(this.amb?this.amb.out:this.master);
-    const f=1500+Math.random()*1100;
-    for(const [m,v] of [[1,1],[2.71,0.35],[5.4,0.12]]){
-      const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f*m;
-      const gg=ctx.createGain(); gg.gain.value=v; o.connect(gg).connect(g); o.start(t); o.stop(t+0.65);
-    }
-  },
-  /* 皿や丼を置く */
-  ambTap(){
-    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.011,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
-    bp.frequency.value=420+Math.random()*480; bp.Q.value=3;
-    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-    s.connect(bp).connect(g).connect(this.amb?this.amb.out:this.master);
-    s.start(t); s.stop(t+0.3);
-  },
-  /* ③ 遠くで誰かが笑う。声の帯だけ持ち上げ、細かく震わせてゆっくり膨らませる */
-  ambLaugh(){
-    const ctx=this.ctx, t=ctx.currentTime, g=ctx.createGain();
-    g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.019,t+0.5+Math.random()*0.4);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+1.8+Math.random()*1.0);
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass';
-    bp.frequency.value=500+Math.random()*320; bp.Q.value=1.6;
-    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1700;
-    const trem=ctx.createGain(); trem.gain.value=1;
-    const o=ctx.createOscillator(); o.frequency.value=4.5+Math.random()*2.5;
-    const og=ctx.createGain(); og.gain.value=0.45;
-    o.connect(og).connect(trem.gain); o.start(t); o.stop(t+3);
-    const s=ctx.createBufferSource(); s.buffer=this.pink(); s.loop=true;
-    s.connect(bp).connect(lp).connect(trem).connect(g).connect(this.amb?this.amb.out:this.master);
-    s.start(t); s.stop(t+3.2);
-  },
   ambStop(){
     const a=this.amb; if(!a) return;
     this.amb=null;
-    if(a.timer) clearTimeout(a.timer);
     if(a.tTimer) clearTimeout(a.tTimer);
     try{ a.out.gain.setTargetAtTime(0,this.ctx.currentTime,0.25); }catch(e){}
     setTimeout(()=>{ try{ a.out.disconnect(); }catch(e){} },1500);
