@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.29 — 注ぐ音</div>
+    <div id="ver">prototype v3.30 — オフライン起動</div>
   </div>
 
   <!-- ゲーム -->
@@ -1689,6 +1689,9 @@ const Input = {
     if(t.listening) return;
     window.addEventListener('deviceorientation',e=>{
       if(e.beta==null) return;
+      // ホーム画面や結果画面では値を捨てる(発熱・電池対策 §20)。購読自体は
+      // 外さない: 外すと再開時に初回イベントを待つ間「センサーなし」と誤判定する
+      if(!el.game.classList.contains('on')) return;
       t.lastEvt=performance.now();
       const b=e.beta==null?t.b:e.beta;
       const g=e.gamma==null?(t.g||0):e.gamma;
@@ -3275,6 +3278,11 @@ updateHome();
 requestAnimationFrame(()=>{ resize(); });
 new ResizeObserver(resize).observe(el.cv);
 window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
+/* オフライン起動(仕様 §20)。Play ストア(TWA)配信の前提でもある。
+   file:// や対応外のブラウザでは黙って何もしない */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
 </script>
 <!-- /APP -->
 </body>
