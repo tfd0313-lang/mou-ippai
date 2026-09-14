@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.28 — 液体を写真に染める</div>
+    <div id="ver">prototype v3.29 — 注ぐ音</div>
   </div>
 
   <!-- ゲーム -->
@@ -1099,8 +1099,10 @@ Save.load();
    気泡層 + 低域ゴボゴボ + 高域シュワ + 水位で上がる容器共鳴の4層。 */
 const Snd = {
   ctx:null, master:null,
-  gStream:null, fStream:null,      // ストリームの乱流
-  gCav:null, fCav:null,            // 容器の共鳴(水位で上がる)
+  bus:null,                        // 注ぎの音のまとめ口
+  gStream:null, fStream:null,      // しぶき(乱流)
+  gGurg:null, fGurg:null,          // ごぼごぼ
+  gCav:null, fCav:null, gCav2:null, fCav2:null,   // 容器の共鳴(水位で上がる)
   _glugAt:0, _crackAt:0, _bubAt:0,
   amb:null,                        // ホーム画面の店の空気(合成。音源ファイルは持たない)
   init(){
@@ -1120,40 +1122,78 @@ const Snd = {
       const loopNoise=()=>{
         const s=this.ctx.createBufferSource(); s.buffer=this.noiseBuf; s.loop=true; s.start(); return s;
       };
-      // 落下するビールが液面を叩く乱流ノイズ
+      /* 注ぎの音は全部ここの配線で鳴る。要点は「乱流で揺らすこと」。
+         ノイズをフィルタに通しただけだと「サー」という定常音になり、
+         合成音だとすぐ分かる。実際の流れは不規則に強まったり弱まったりする
+         ので、白ノイズの低域だけを取り出した揺らぎ信号で音量を動かす */
+      const ctl=(hz,amt)=>{
+        const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=hz; f.Q.value=0.7;
+        const g=this.ctx.createGain(); g.gain.value=amt;
+        loopNoise().connect(f).connect(g); return g;
+      };
+      /* 注ぎの音のまとめ口。スピーカーで刺さらないよう上を丸める */
+      this.bus=this.ctx.createGain(); this.bus.gain.value=1.9;   // 揺らぎで平均が下がるぶんを戻す
+      const tone=this.ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=7200; tone.Q.value=0.5;
+      this.bus.connect(tone).connect(this.master);
+      const chain=(filter,base,ctlHz,ctlAmt)=>{
+        const m=this.ctx.createGain(); m.gain.value=base;         // 揺らぎで動く段
+        ctl(ctlHz,ctlAmt).connect(m.gain);
+        const g=this.ctx.createGain(); g.gain.value=0;            // 流量で動く段
+        loopNoise().connect(filter).connect(m).connect(g).connect(this.bus);
+        return g;
+      };
+      // しぶき: 落ちた液が液面を叩く高めの帯
       this.fStream=this.ctx.createBiquadFilter();
-      this.fStream.type='bandpass'; this.fStream.frequency.value=1400; this.fStream.Q.value=0.5;
-      this.gStream=this.ctx.createGain(); this.gStream.gain.value=0;
-      loopNoise().connect(this.fStream).connect(this.gStream).connect(this.master);
-      // グラス内の空気柱共鳴。液面が上がるほど高くなる=満杯が耳で分かる
+      this.fStream.type='bandpass'; this.fStream.frequency.value=1500; this.fStream.Q.value=0.9;
+      this.gStream=chain(this.fStream,0.55,7,22);
+      // ごぼごぼ: 中低の帯。液の塊が入るときの音
+      this.fGurg=this.ctx.createBiquadFilter();
+      this.fGurg.type='bandpass'; this.fGurg.frequency.value=480; this.fGurg.Q.value=1.3;
+      this.gGurg=chain(this.fGurg,0.5,11,30);
+      // グラス内の空気柱共鳴。液面が上がるほど高くなる=満杯が耳で分かる。
+      // 基音と、その上の倍音を1本。倍音があると筒の鳴りに聞こえる
       this.fCav=this.ctx.createBiquadFilter();
-      this.fCav.type='bandpass'; this.fCav.frequency.value=200; this.fCav.Q.value=7;
-      this.gCav=this.ctx.createGain(); this.gCav.gain.value=0;
-      loopNoise().connect(this.fCav).connect(this.gCav).connect(this.master);
+      this.fCav.type='bandpass'; this.fCav.frequency.value=200; this.fCav.Q.value=11;
+      this.gCav=chain(this.fCav,0.6,5,18);
+      this.fCav2=this.ctx.createBiquadFilter();
+      this.fCav2.type='bandpass'; this.fCav2.frequency.value=474; this.fCav2.Q.value=7;
+      this.gCav2=chain(this.fCav2,0.6,6,18);
+      this._pouring=false;
     }catch(e){}
   },
   resume(){ if(this.ctx&&this.ctx.state!=='running'){ try{ this.ctx.resume().catch(()=>{}); }catch(e){} } },
 
-  /* 瓶口から空気が入る「ゴボッ」。連続ノイズではなく離散パルスで鳴らす */
+  /* 瓶口から空気が入る「トクッ」。サイン波を鳴らすと電子音になる。
+     実物は瓶の中の空気が短く共鳴する音なので、ノイズの短い塊を鋭い
+     バンドパスに通して作る。音程は空気が入るにつれ少し下がる */
   glug(nf){
-    const t=this.ctx.currentTime;
-    const dur=0.13+Math.random()*0.07;
-    const f0=90+Math.random()*45+nf*30;
-    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
-    o.type='sine';
-    o.frequency.setValueAtTime(f0*1.5,t);
-    o.frequency.exponentialRampToValueAtTime(f0,t+dur*0.8);
+    const ctx=this.ctx, t=ctx.currentTime;
+    const dur=0.11+Math.random()*0.09;
+    const f0=(130+Math.random()*70)*(1+nf*0.25);
+    const s=ctx.createBufferSource(); s.buffer=this.noiseBuf;
+    s.playbackRate.value=0.7+Math.random()*0.5;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=13;
+    bp.frequency.setValueAtTime(f0*1.45,t);
+    bp.frequency.exponentialRampToValueAtTime(f0,t+dur*0.7);
+    const g=ctx.createGain();
     g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.16+nf*0.10,t+0.012);
-    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
-    o.connect(g).connect(this.master); o.start(t); o.stop(t+dur+0.03);
-    // ゴボッに混ざる短い破裂ノイズ
-    const s=this.ctx.createBufferSource(); s.buffer=this.noiseBuf;
-    s.playbackRate.value=0.6+Math.random()*0.5;
-    const bf=this.ctx.createBiquadFilter(); bf.type='bandpass'; bf.frequency.value=420; bf.Q.value=1.4;
-    const bg=this.ctx.createGain();
-    bg.gain.setValueAtTime(0.10,t); bg.gain.exponentialRampToValueAtTime(0.0006,t+0.09);
-    s.connect(bf).connect(bg).connect(this.master); s.start(t); s.stop(t+0.12);
+    g.gain.exponentialRampToValueAtTime(1.6*(0.6+nf*0.5),t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    s.connect(bp).connect(g).connect(this.bus); s.start(t); s.stop(t+dur+0.05);
+    // 芯。共鳴の底を支える低い成分。小さく
+    const o=ctx.createOscillator(), g2=ctx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(f0*1.35,t);
+    o.frequency.exponentialRampToValueAtTime(f0*0.95,t+dur*0.8);
+    g2.gain.setValueAtTime(0.0001,t);
+    g2.gain.exponentialRampToValueAtTime(0.07+nf*0.05,t+0.008);
+    g2.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    o.connect(g2).connect(this.bus); o.start(t); o.stop(t+dur+0.03);
+    // 瓶口で液が切れる短いクリック
+    const c=ctx.createBufferSource(); c.buffer=this.noiseBuf; c.playbackRate.value=1.6;
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1800;
+    const g3=ctx.createGain();
+    g3.gain.setValueAtTime(0.09,t); g3.gain.exponentialRampToValueAtTime(0.001,t+0.014);
+    c.connect(hp).connect(g3).connect(this.bus); c.start(t); c.stop(t+0.03);
   },
   /* 泡の炭酸がはじける音。ビールらしさの決め手。泡量に比例して鳴らす */
   crackle(amount){
@@ -1162,60 +1202,82 @@ const Snd = {
     const s=this.ctx.createBufferSource(); s.buffer=this.noiseBuf;
     s.playbackRate.value=1.4+Math.random()*1.4;
     const f=this.ctx.createBiquadFilter();
-    f.type='bandpass'; f.frequency.value=3600+Math.random()*5200; f.Q.value=3+Math.random()*4;
+    f.type='bandpass'; f.frequency.value=3200+Math.random()*4800; f.Q.value=3+Math.random()*4;
     const g=this.ctx.createGain();
-    g.gain.setValueAtTime((0.05+Math.random()*0.10)*amount,t);
+    g.gain.setValueAtTime((0.04+Math.random()*0.09)*amount,t);
     g.gain.exponentialRampToValueAtTime(0.0004,t+dur);
-    s.connect(f).connect(g).connect(this.master); s.start(t); s.stop(t+dur+0.02);
+    s.connect(f).connect(g).connect(this.bus); s.start(t); s.stop(t+dur+0.02);
   },
   /* 液中を上る気泡: 音程が上がりながら消えるチャープ(液体音の物理モデル) */
   bubble(fill){
     const t=this.ctx.currentTime+Math.random()*0.02;
-    const dur=0.025+Math.random()*0.05;
-    const f0=(500+Math.random()*Math.random()*2000)*(1+fill*0.3);
+    const dur=0.02+Math.random()*0.05;
+    const f0=(450+Math.random()*Math.random()*2200)*(1+fill*0.3);
     const o=this.ctx.createOscillator(), g=this.ctx.createGain();
     o.type='sine';
     o.frequency.setValueAtTime(f0,t);
-    o.frequency.exponentialRampToValueAtTime(f0*1.5,t+dur);
-    g.gain.setValueAtTime(0.010+Math.random()*0.022,t);
+    o.frequency.exponentialRampToValueAtTime(f0*1.4,t+dur);
+    g.gain.setValueAtTime(0.006+Math.random()*0.016,t);
     g.gain.exponentialRampToValueAtTime(0.0004,t+dur);
-    o.connect(g).connect(this.master); o.start(t); o.stop(t+dur+0.02);
+    o.connect(g).connect(this.bus); o.start(t); o.stop(t+dur+0.02);
+  },
+  /* 注ぎ始め。最初の一撃だけは液面を叩く音が大きく、細かい泡が一斉に立つ */
+  splash(nf){
+    const ctx=this.ctx, t=ctx.currentTime;
+    const s=ctx.createBufferSource(); s.buffer=this.noiseBuf;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.8;
+    bp.frequency.setValueAtTime(1700,t); bp.frequency.exponentialRampToValueAtTime(650,t+0.18);
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.10+nf*0.12,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+    s.connect(bp).connect(g).connect(this.bus); s.start(t); s.stop(t+0.25);
+    for(let i=0;i<6;i++) setTimeout(()=>this.bubble(0.1), i*22+Math.random()*20);
   },
   /* 毎フレーム: nf=流量0..1 fill=充填率0..1 foam=泡比率0..1 */
   pour(nf,fill,foam,dt){
     if(!this.ctx) return;
     const t=this.ctx.currentTime;
-    this.gStream.gain.setTargetAtTime(nf*0.085,t,0.05);
-    this.fStream.frequency.setTargetAtTime(900+nf*1500,t,0.08);
-    this.gCav.gain.setTargetAtTime(nf*0.30,t,0.05);
-    this.fCav.frequency.setTargetAtTime(170+fill*700,t,0.09);
+    if(!this._pouring && nf>0.08) this.splash(nf);
+    this._pouring = nf>0.02;
+    // 泡が厚いほど液面が覆われて、しぶきも共鳴もくぐもる
+    const damp=1-0.42*foam;
+    this.gStream.gain.setTargetAtTime(nf*0.075*damp,t,0.05);
+    this.fStream.frequency.setTargetAtTime(1100+nf*1500,t,0.08);
+    this.gGurg.gain.setTargetAtTime(nf*0.070*damp,t,0.05);
+    const cav=170+fill*720;
+    this.gCav.gain.setTargetAtTime(nf*0.26*damp*(0.7+0.3*nf),t,0.05);
+    this.fCav.frequency.setTargetAtTime(cav,t,0.09);
+    this.gCav2.gain.setTargetAtTime(nf*0.07*damp,t,0.05);
+    this.fCav2.frequency.setTargetAtTime(cav*2.37,t,0.09);
     if(nf<=0) return;
-    // ゴボゴボ: 流量が多いほど間隔が短い
-    if(t>this._glugAt){ this.glug(nf); this._glugAt=t+(0.30-nf*0.16)*(0.75+Math.random()*0.5); }
+    // トクトク: 流量が多いほど間隔が短い。間隔は毎回ばらす(等間隔だと機械に聞こえる)
+    if(t>this._glugAt){ this.glug(nf); this._glugAt=t+(0.30-nf*0.16)*(0.6+Math.random()*0.8); }
     // 炭酸のはじけ: 泡が多いほど密に
     const crackRate=40+foam*260+nf*60;
     this._crackAt+=dt*crackRate;
     let nc=Math.min(Math.floor(this._crackAt),6); this._crackAt-=nc;
     for(let i=0;i<nc;i++) this.crackle(0.5+foam*0.9);
     // 気泡
-    this._bubAt+=dt*(12+nf*40);
-    let nb=Math.min(Math.floor(this._bubAt),3); this._bubAt-=nb;
+    this._bubAt+=dt*(16+nf*48);
+    let nb=Math.min(Math.floor(this._bubAt),4); this._bubAt-=nb;
     for(let i=0;i<nb;i++) this.bubble(fill);
   },
   /* 注ぎを止めた後も泡がはじけ続ける余韻 */
   settleFizz(foam,dt){
     if(!this.ctx) return;
     const t=this.ctx.currentTime;
+    this._pouring=false;
     this.gStream.gain.setTargetAtTime(0,t,0.06);
+    this.gGurg.gain.setTargetAtTime(0,t,0.06);
     this.gCav.gain.setTargetAtTime(0,t,0.08);
+    this.gCav2.gain.setTargetAtTime(0,t,0.08);
     this._crackAt+=dt*(30+foam*150);
     let nc=Math.min(Math.floor(this._crackAt),4); this._crackAt-=nc;
     for(let i=0;i<nc;i++) this.crackle(0.35+foam*0.6);
   },
   silence(){ if(!this.ctx) return;
     const t=this.ctx.currentTime;
-    this.gStream.gain.setTargetAtTime(0,t,0.05);
-    this.gCav.gain.setTargetAtTime(0,t,0.05);
+    this._pouring=false;
+    for(const g of [this.gStream,this.gGurg,this.gCav,this.gCav2]) g.gain.setTargetAtTime(0,t,0.05);
   },
   blip(f,dur=0.09,type='square',vol=0.12,when=0){ if(!this.ctx) return;
     const t=this.ctx.currentTime+when;
