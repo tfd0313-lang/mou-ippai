@@ -7,7 +7,7 @@
    - art/*.json と voice/* は「cache 優先、裏でネットから取り直す」。18人ぶん 20MB を
      毎回取りに行かない。更新は次回起動で反映される
    VER を上げると古い cache を捨てる。本体の版(#ver)を上げたら一緒に上げること */
-const VER = 'mou-ippai-v3.32';
+const VER = 'mou-ippai-v3.33';
 const CORE = ['./', './index.html', './manifest.webmanifest',
               './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
