@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.30 — オフライン起動</div>
+    <div id="ver">prototype v3.31 — 指が手前</div>
   </div>
 
   <!-- ゲーム -->
@@ -1734,6 +1734,20 @@ Object.keys(CHAR_ART).forEach(id=>{ charaEls[id]=$('ch_'+id); });
 let curChara=charaEls.papa, curPhoto=null;
 const photoEl=$('photoChara');
 let curScene=null, sceneImgs={}, scenePending=false;
+const sceneHand={};                       // キャラID → 指のマスク画像
+/* いま表示している表情の画像から「グラスの手前にある指」だけを切り出した層。
+   表情が変わったときだけ作り直す(毎フレーム作ると重い) */
+function handLayer(chId,img){
+  const m=sceneHand[chId]; if(!m) return null;
+  if(img.__hand && img.__handMask===m) return img.__hand;
+  const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+  const g=c.getContext('2d');
+  g.drawImage(img,0,0);
+  g.globalCompositeOperation='destination-in';
+  g.drawImage(m,0,0,c.width,c.height);
+  img.__hand=c; img.__handMask=m;
+  return c;
+}
 /* キャラの画像は1人ぶんで約470KB。全員を1ファイルに抱えると読み込みが
    実用的でなくなるため、遊ぶレベルのぶんだけ art/<id>.json から取りに行く。
    単一ファイル版(Artifact用)は ART.scene に全部入っており、その場合は
@@ -1756,7 +1770,10 @@ function ensureScene(chId){
         im.onload=()=>res();
         im.onerror=()=>{ delete d.imgs[k]; delete imgs[k]; res(); };
         im.src=d.imgs[k]; imgs[k]=im;
-      }))).then(()=>{ sceneImgs[chId]=imgs; sceneData[chId]=d; sceneFailed[chId]=false; });
+      })).concat(d.hand ? [new Promise(res=>{
+        // グラスを持つ指のマスク(tools/hand_mask.py)。無ければ指はビールの下に沈む
+        const im=new Image(); im.onload=()=>{ sceneHand[chId]=im; res(); }; im.onerror=()=>res(); im.src=d.hand;
+      })] : [])).then(()=>{ sceneImgs[chId]=imgs; sceneData[chId]=d; sceneFailed[chId]=false; });
     })
     .catch(()=>{ sceneFailed[chId]=true; delete sceneLoading[chId]; });
     // 失敗してもSVGのキャラで遊べる。次にこのキャラへ入ったとき取り直す
@@ -2783,6 +2800,12 @@ function renderScene(now){
     }
     ctx.restore();
   }
+  // グラスを持っている指は液体より手前にある(オーナー指摘)。写真の指の
+  // 画素だけをマスクで切り出して、液体と泡の上に置き直す
+  if((fillL>0.004||fillP>0.004) && curScene){
+    const hl=handLayer(G.lvl.ch,img);
+    if(hl) ctx.drawImage(hl,dx,dy,dw,dh);
+  }
   const F=(s.L+s.P)/s.C;
   // 満点の高さそのものを線で出す。縁を見下ろす角度で描かれた絵では、
   // 液面の楕円と縁の楕円が重なってしまい、あとどれだけ入るかが読めない。
@@ -2887,14 +2910,6 @@ function renderScene(now){
     sg.addColorStop(0.70,'rgba(230,152,40,0.94)');
     sg.addColorStop(1,   'rgba(146,82,12,0.88)');
     ctx.fillStyle=sg; stream(); ctx.fill();
-    // すじの中を光が流れ落ちる。静止したリボンではなく動く液体に見える
-    ctx.fillStyle='rgba(255,246,220,0.55)';
-    for(let k=0;k<3;k++){
-      const u=((now/260)+k/3)%1;
-      const yy=sp.y+(landY-sp.y)*u, ww=(swT+(swB-swT)*u)*0.28;
-      const xx=(sp.x+(lx-sp.x)*Math.min(1,u*1.4))-ww*0.4;
-      ctx.beginPath(); ctx.ellipse(xx,yy,ww,4+nf*3,0,0,Math.PI*2); ctx.fill();
-    }
     // 落ち口。液が液を叩くところは白く泡立ち、細かい泡が跳ねる
     ctx.fillStyle='rgba(255,250,238,0.42)';
     ctx.beginPath();
