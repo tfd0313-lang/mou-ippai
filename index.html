@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.33 — 全キャラのグラス形状と指マスクを再調整</div>
+    <div id="ver">prototype v3.34 — 泡メーターどおりに採点・指マスク拡張</div>
   </div>
 
   <!-- ゲーム -->
@@ -685,6 +685,7 @@ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
 const smoothstep=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
 
+const ART_V='3.34';   // art/*.json の取得 URL に付ける版。絵や指マスクを更新したら上げる
 const CFG = {
   RAMP:0.12,
   // 注ぎを止めてからの猶予。実際のビールと同じく「泡が落ち着くのを待って
@@ -694,13 +695,17 @@ const CFG = {
   // 0.26では全力でもR=0.26止まりで上限(0.40)に届かず、メーターが飾りだった。
   // 0.46なら 全力=多すぎ(R0.43) / 半分=下限ぎわ(R0.15) / その間=ちょうど、と
   // 注ぐ強さがそのまま泡の帯に写る
-  FOAM_LO:0.05, FOAM_HI:0.46, FOAM_EXP:1.5, FOAM_EXPANSION:1.6,
-  // 泡は待てば目に見えて崩れ、その多くが液体へ戻る。
-  // 泡が多すぎたら手を止めて待つ、が有効な立て直し手段になる
-  // 0.15だと猶予(1〜2秒)の間に「多め」から「ちょうど」まで戻らず、待つ意味が薄かった
+  // FOAM_HIは DECAY を 0.06 に落としたのに合わせて 0.46→0.36。実測(LV7・普通):
+  // 全開=泡36%(多め, 泡5/20) / 押しっぱなし=34%(多め) / 70%=24%(ちょうど) / 50%=16%(ちょうど) / 40%=12%(少なめ)
+  FOAM_LO:0.05, FOAM_HI:0.36, FOAM_EXP:1.5, FOAM_EXPANSION:1.6,
+  // 泡は待てば少しずつ崩れ、その多くが液体へ戻る。
+  // 0.20(毎秒20%)では、全開で注いで泡39%(多め)で止めても猶予2.3秒のあいだに
+  // 25%(ちょうど)まで勝手に沈み、泡メーターの表示とスコアが噛み合っていなかった
+  // (オーナー指摘)。0.06なら同じ猶予で39%→34%。止めた時の表示がほぼそのまま
+  // 判定に使われ、待って注ぎ足す立て直しは残る(2秒待って泡が約1割減る)
   // RETURNは崩れた泡のうち液体へ戻る割合。0.88では泡20%の一杯が判定までに
   // 約1.3%沈み、線ぴったりで止めても満点圏(98.5〜100%)から落ちていた
-  FOAM_DECAY:0.20, FOAM_RETURN:0.97,
+  FOAM_DECAY:0.06, FOAM_RETURN:0.97,
   OVF_GRACE:0.002, SPILL_OUT:0.02,
   PERFECT_F:0.985, PERFECT_W:0.003,   // 合格・いい一杯の下限はレベルごと(bandOf)
   TICK:1/120,
@@ -1758,7 +1763,9 @@ const sceneFailed = {};   // 失敗を覚える。覚えないと入るたびに
 function ensureScene(chId){
   if(!SCENE_IDS.includes(chId) || sceneData[chId]) return Promise.resolve();
   if(sceneLoading[chId]) return sceneLoading[chId];
-  sceneLoading[chId] = fetch('art/'+chId+'.json')
+  // 版ごとに URL を変える。Service Worker は art/ を cache 優先で返すので、
+  // 同じ URL のままだと更新後も一度は古い絵と指マスクが出る
+  sceneLoading[chId] = fetch('art/'+chId+'.json?v='+ART_V)
     .then(r=>r.ok?r.json():null)
     .then(d=>{
       if(!d){ sceneFailed[chId]=true; delete sceneLoading[chId]; return; }
@@ -1851,6 +1858,10 @@ function setupFoamChip(){
 function updateFoamChip(R,trend,fill){
   if(!el.foamChip.classList.contains('on')) return;
   const o=foamOrder(G.lvl);
+  // メーターは「判定のときの泡」を出す。注ぎ止めから判定までの残り時間ぶん
+  // 泡が沈む(FOAM_DECAY)ので、今の比率のままだと表示と採点がずれる
+  const rem=Math.max(graceOf(G.lvl)-(G.sim?G.sim.zeroT:0),0)+0.5;
+  R=R*Math.exp(-CFG.FOAM_DECAY*rem);
   // 注ぎはじめは中身がほとんど無く、比率がはねて意味を持たない。
   // ある程度たまるまでは針を左端に置き、言葉も出さない
   const ready = fill>=0.06;
