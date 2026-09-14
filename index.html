@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.31 — 指が手前</div>
+    <div id="ver">prototype v3.32 — EXはボタンでも傾ける</div>
   </div>
 
   <!-- ゲーム -->
@@ -2123,9 +2123,10 @@ function swayTrackUpdate(){
   if(!a.total){ G.streamDX=0; return; }
   const sc=CW/390, t=performance.now()/1000, ph=Math.sin(t*Math.PI*2/lvl.sway.period);
   const gx=ph*a.photo;                              // グラスの中心のずれ
-  // 傾けモードで遊んでいる人だけが自分で追う。ボタンで遊んでいる人は瓶が自動で追う
-  // (ボタン操作なのに携帯を傾けないとこぼれる、という理不尽をなくす)
-  const side = Input.mode==='tilt' ? Input.side() : null;
+  // 横の傾きは操作方式に関係なく使う。ボタンで注ぐ人も、EXでは携帯を左右に
+  // 傾けて揺れるグラスを追う(瓶が勝手に追うとEXの意味が無い: オーナー指摘)。
+  // センサーが無い端末だけ、瓶が自動で追う(side() が null)
+  const side = Input.side();
   const range=Math.max(40*sc, a.total*1.15);        // 傾け切ったときの瓶の移動量
   const sx = side==null ? gx : -ph*a.hand + side*range;
   G.streamDX=sx;
