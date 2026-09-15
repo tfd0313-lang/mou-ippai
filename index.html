@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.35 — 更新を自動で取り込む</div>
+    <div id="ver">prototype v3.36 — 満点の線を縁に・EXの瓶は傾けたときだけ動く</div>
   </div>
 
   <!-- ゲーム -->
@@ -1648,7 +1648,10 @@ const Input = {
     const t=this.tilt;
     if(!t.everGot || performance.now()-t.lastEvt>3000) return null;
     if(t.gBase==null) t.gBase=t.g;
-    return clamp((t.g-t.gBase)/8, -1, 1);          // ±8度で端まで
+    // 手持ちの微かなぶれ(±0.6度)は無視する。瓶が小刻みに揺れて見えないように
+    const d=t.g-t.gBase, dz=0.6;
+    const v=Math.abs(d)<=dz ? 0 : (d-Math.sign(d)*dz);
+    return clamp(v/(8-dz), -1, 1);                  // ±8度で端まで
   },
   swipe:{active:false,startX:0,ang:0},
   useSwipe:false,
@@ -2116,8 +2119,10 @@ function swayAmps(){
   const half=G.glassHalfW||0;
   if(!scale || !half) return {photo:0, hand:0, total:0};
   const total=clamp(half*1.05*scale, 20*sc, 90*sc);
-  const photo=Math.min(26*sc, total*0.4);
-  return {photo, hand:total-photo, total};
+  // 揺れるのはグラス(写真)だけ。以前は瓶側にも「手の震え」(total の6割)を
+  // 持たせていたが、何もしていないのに瓶が左右に動いて見えた(オーナー指摘)。
+  // 瓶は携帯の傾きだけで動く。外れる幅は同じ(グラスの揺れ幅=total)
+  return {photo:total, hand:0, total};
 }
 function safeSwayOffset(now){
   const sw=G.lvl.sway;
@@ -2136,10 +2141,11 @@ function swayTrackUpdate(){
   const gx=ph*a.photo;                              // グラスの中心のずれ
   // 横の傾きは操作方式に関係なく使う。ボタンで注ぐ人も、EXでは携帯を左右に
   // 傾けて揺れるグラスを追う(瓶が勝手に追うとEXの意味が無い: オーナー指摘)。
+  // 瓶の位置は傾きだけで決まり、傾けなければ中央に止まっている。
   // センサーが無い端末だけ、瓶が自動で追う(side() が null)
   const side = Input.side();
   const range=Math.max(40*sc, a.total*1.15);        // 傾け切ったときの瓶の移動量
-  const sx = side==null ? gx : -ph*a.hand + side*range;
+  const sx = side==null ? gx : side*range;
   G.streamDX=sx;
   if(s.Q<=0){ return; }                             // 注いでいない間は外れようがない
   const half=G.glassHalfW, sw=(2+7*clamp(s.Q/Math.max(s.target,1e-9),0,1))*0.5+3;
@@ -2819,11 +2825,12 @@ function renderScene(now){
     if(hl) ctx.drawImage(hl,dx,dy,dw,dh);
   }
   const F=(s.L+s.P)/s.C;
-  // 満点の高さそのものを線で出す。縁を見下ろす角度で描かれた絵では、
-  // 液面の楕円と縁の楕円が重なってしまい、あとどれだけ入るかが読めない。
-  // 縁を基準にさせず、狙う高さを直接見せる
+  // 狙う高さを線で出す。線はグラスの縁そのもの(=あふれる高さ)に置く。
+  // 以前は満点圏の下限(98.5%)に置いていたが、縁より数px下に線が出て
+  // 「グラスのギリギリと液面ラインが合っていない」と見えた(オーナー指摘)。
+  // 採点は変えない: 縁ぴったり〜1.5%下までが満点
   if(!s.out && (G.phase==='play'||G.phase==='settle')){
-    const yT=botY-innerH*CFG.PERFECT_F;
+    const yT=topY;
     const w=hwAt(yT), rx=Math.max((w.R-w.L)/2,0.1), ry=Math.max(ryAt(yT),0.1);
     const near=clamp((F-0.5)/0.45,0,1);
     ctx.save();
