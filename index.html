@@ -419,7 +419,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.34 — 泡メーターどおりに採点・指マスク拡張</div>
+    <div id="ver">prototype v3.35 — 更新を自動で取り込む</div>
   </div>
 
   <!-- ゲーム -->
@@ -3308,7 +3308,21 @@ window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,b
 /* オフライン起動(仕様 §20)。Play ストア(TWA)配信の前提でもある。
    file:// や対応外のブラウザでは黙って何もしない */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  // 更新の取り込み。ホーム画面のアプリは前のページが常駐したまま復帰するので、
+  // 配信を更新しても読み直さない限り古い版のまま(オーナー報告: v3.32のまま)。
+  // 復帰時と30分ごとに sw.js の更新を確かめ、新しい版が入ったらホーム画面にいる間に読み直す
+  const hadController=!!navigator.serviceWorker.controller;
+  let reloading=false;
+  const atHome=()=>!document.getElementById('game').classList.contains('on');
+  const reloadWhenHome=()=>{ if(reloading) return; if(atHome()){ reloading=true; location.reload(); } else setTimeout(reloadWhenHome,2000); };
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadController) reloadWhenHome(); });
+  addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      const check=()=>{ reg.update().catch(()=>{}); };
+      document.addEventListener('visibilitychange',()=>{ if(!document.hidden) check(); });
+      setInterval(check,30*60*1000);
+    }).catch(()=>{});
+  });
 }
 </script>
 <!-- /APP -->
