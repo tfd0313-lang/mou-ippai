@@ -1,7 +1,7 @@
 {
   "name": "もう一杯！",
   "short_name": "もう一杯！",
-  "description": "傾けて注ぐ、ギリギリゲーム",
+  "description": "あふれる直前で止める、ギリギリゲーム",
   "lang": "ja",
   "start_url": "./",
   "scope": "./",

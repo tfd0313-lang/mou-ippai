@@ -15,7 +15,9 @@
 </head>
 <body>
 <!-- APP -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<!-- Web フォントは非ブロッキングで読む。回線が細いとここでパーサが止まり、画面全体が
+     数秒〜十数秒真っ暗になっていた(QA指摘)。届くまでは端末のフォントで出す -->
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
 /* 『もう一杯！』プロトタイプv0.3 — SPEC v1.3 + 対戦相手・レベル・背景仕様書v1.1
    実装範囲: 通常編LEVEL 1〜9(ママ/パパ/上司)、別紙仕様書P0 */
@@ -89,6 +91,9 @@ body{
 @media (prefers-reduced-motion:reduce){#homeTrain{display:none}}
 #home{justify-content:flex-end}
 #home h1{text-shadow:0 2px 14px rgba(0,0,0,.85),0 0 30px rgba(232,161,60,.4)}
+/* 3秒で「ビールを注ぐゲーム」と分かるよう、タイトルの上にグラスを置く(デザイン指摘) */
+#home h1::before{content:"";display:block;width:60px;height:60px;margin:0 auto 6px;background:url(icon-192.png) center/contain no-repeat;filter:drop-shadow(0 4px 12px rgba(0,0,0,.6))}
+@media (max-height:700px){#home h1::before{display:none}}
 #home .sub,#modeHint,#homeBest,#ver{text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 9px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.75)}
 .seg{background:rgba(16,10,6,.86)}
 #voiceBtn,#bgmBtn{background:rgba(16,10,6,.86)}
@@ -99,7 +104,7 @@ body{
   margin-top:10px;   /* 上の設定群と区切って「ここからが本編」のリズムを作る */
   background:rgba(16,10,6,.86);border:1px solid rgba(232,161,60,.45);border-radius:14px;padding:9px 11px}
 #lvPick button{appearance:none;border:0;background:rgba(232,161,60,.22);color:#F6E7CB;
-  width:40px;height:40px;border-radius:10px;font:inherit;font-size:17px;font-weight:700;
+  width:44px;height:44px;border-radius:10px;font:inherit;font-size:17px;font-weight:700;
   flex:0 0 auto;cursor:pointer;touch-action:manipulation}
 #lvPick button:active{background:var(--amber);color:#221503}
 #lvPick button:disabled{opacity:.32}
@@ -156,7 +161,7 @@ button{touch-action:manipulation}
 #startBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #7A4A0C}
 #homeBest{color:var(--mut);font-size:12px;line-height:1.8;font-variant-numeric:tabular-nums}
 #homeBest b{color:var(--cream);font-weight:700}
-#ver{color:#5d5142;font-size:10px;letter-spacing:.1em;padding-bottom:4px}
+#ver{color:#8C7B64;font-size:11px;letter-spacing:.06em;padding-bottom:4px}
 
 /* ---------- ゲーム(背景3種) ---------- */
 #game{background:var(--ink)}
@@ -224,7 +229,7 @@ button{touch-action:manipulation}
                  100%{transform:translateY(-190px) scale(1.5);opacity:0}}
 /* シーンモード: Gemini画像の人物+グラスがそのまま舞台になる */
 #game.scene #charaArea{flex:0 0 0;min-height:0}
-#game.scene #bubble{top:calc(env(safe-area-inset-top,0px) + 14px);right:6%}
+#game.scene #bubble{top:calc(env(safe-area-inset-top,0px) + 36px);right:6%}
 #game.scene #telemark{top:40vh;bottom:auto;right:14%}
 #charaArea{flex:0 0 24%;position:relative;display:flex;align-items:flex-end;justify-content:center}
 #charaArea.has-photo{flex:0 0 30%}
@@ -340,7 +345,7 @@ button{touch-action:manipulation}
 #result{
   position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
   justify-content:flex-end;z-index:5;
-  background:linear-gradient(180deg,transparent 0%,rgba(10,7,4,.55) 30%,rgba(10,7,4,.93) 62%);
+  background:linear-gradient(180deg,transparent 0%,rgba(10,7,4,.55) 30%,rgba(10,7,4,.93) 62%,rgba(10,7,4,1) 80%);
   padding:0 24px calc(env(safe-area-inset-bottom,0px) + 18px);
 }
 #result.on{display:flex}
@@ -365,7 +370,7 @@ button{touch-action:manipulation}
 #resMeta b{color:var(--cream)}
 #resScore{margin-top:4px;font-variant-numeric:tabular-nums;font-size:14px;color:var(--mut);text-align:center}
 #resScore b{font-size:28px;color:var(--cream);font-family:"Shippori Mincho B1",serif}
-#resParts{display:block;font-size:11px;color:var(--mut);margin-top:3px;letter-spacing:.08em}
+#resParts{display:block;font-size:13px;color:var(--mut);margin-top:3px;letter-spacing:.06em}
 #newBest{color:var(--amber);font-size:12px;letter-spacing:.2em;margin-top:2px;display:none}
 #newBest.on{display:block;animation:bestPulse .55s ease}
 @keyframes bestPulse{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
@@ -391,7 +396,7 @@ button{touch-action:manipulation}
   padding:8px 10px;font-size:11px;line-height:1.7;color:#b9e0a2;
   font-family:ui-monospace,monospace;white-space:pre;z-index:9}
 #debug.on{display:block}
-#notice{position:absolute;left:50%;top:32%;transform:translateX(-50%);
+#notice{position:absolute;left:50%;top:auto;bottom:calc(23% + 14px);transform:translateX(-50%);
   background:rgba(10,7,4,.92);border:1px solid var(--wood-hi);color:var(--cream);
   font-size:13px;letter-spacing:.04em;padding:10px 16px;border-radius:10px;line-height:1.6;
   opacity:0;pointer-events:none;transition:opacity .2s;max-width:86%;text-align:center;z-index:8}
@@ -404,7 +409,7 @@ button{touch-action:manipulation}
   <div id="home" class="screen on">
     <div id="homeBg"></div><div id="homeGlow"></div><div id="homeTrain" aria-hidden="true"></div><div id="homeScrim"></div>
     <h1>もう<em>一杯</em>！</h1>
-    <div class="sub">傾けて注ぐ、ギリギリゲーム</div>
+    <div class="sub">あふれる直前で止める、ギリギリゲーム</div>
     <div class="seg" role="group" aria-label="操作方式">
       <button id="modeBtnBtn" class="on">ボタンで注ぐ</button>
       <button id="modeTiltBtn">傾け／スワイプ</button>
@@ -419,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">prototype v3.36 — 満点の線を縁に・EXの瓶は傾けたときだけ動く</div>
+    <div id="ver">v3.37</div>
   </div>
 
   <!-- ゲーム -->
@@ -1596,10 +1601,12 @@ function judge(s,lvl){
   if(s.out==='OVERFLOW') v='OVERFLOW';
   else if(s.out==='SPILL'||Wr>=CFG.SPILL_OUT) v='SPILL';
   else if(F<b.min) v='LOW';
-  else if(F>=CFG.PERFECT_F && Wr<CFG.PERFECT_W && R>=o.ideal[0] && R<=o.ideal[1]) v='PERFECT';
   else if(F>=b.great && R>=o.accept[0] && R<=o.accept[1]) v='GREAT';
   else v='SAFE';
-  const sc=score(v,F,R,Wr,o,b);
+  let sc=score(v,F,R,Wr,o,b);
+  // PERFECT は「表示が100点」と同じ条件にする。以前は 98.5% 以上を別に要求していて、
+  // 98.4% で量が四捨五入 75/75 → 合計100点なのに「いい一杯」が出た(デザイン指摘)
+  if(v==='GREAT' && sc.total===100 && Wr<CFG.PERFECT_W){ v='PERFECT'; sc=score(v,F,R,Wr,o,b); }
   return {v,F,R,Wr,score:sc.total,parts:sc.parts};
 }
 /* 点の根拠を出せるよう、内訳(量75点/泡20点/こぼし5点)ごとに丸めてから足す */
@@ -2004,12 +2011,13 @@ function startLevel(n, retry){
     const hzNames = lvl.hazards ? lvl.hazards.map(h=>h.name).join('・') : (lvl.hazard?lvl.hazard.name:'');
     el.introInfo.innerHTML=
       (lvl.lv===EX_START?'<b>ここから無理杯です</b><br>':'')+
+      (lvl.ch==='musuko'?'息子は20歳(飲酒は20歳になってから)<br>':'')+
       `合格 <b>${Math.round(bandOf(lvl).min*100)}%〜</b>　満杯まで <b>${lvl.fillSec}秒</b>${lvl.glassNote?'('+lvl.glassNote+')':''}　猶予 <b>${graceOf(lvl).toFixed(1)}秒</b><br>`+
       `止まるまで <b>${stopLag(lvl)>0?stopLag(lvl).toFixed(2).replace(/0$/,'')+'秒':'すぐ'}</b>　`+
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
       (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
-      (lvl.ex&&lvl.sway&&lvl.swayScale?'<br><b>グラスが揺れ、手も震える</b>: 携帯を左右に傾けて瓶を合わせる<br><span style="font-size:11px">iPhoneは「動作と方向のアクセス」の許可が要る(断ると瓶は自動で追う)</span>':'')+
+      (lvl.ex&&lvl.sway&&lvl.swayScale?'<br><b>グラスが揺れる</b>: 携帯を左右に傾けて瓶を合わせる<br><span style="font-size:11px">iPhoneは「動作と方向のアクセス」の許可が要る(断ると瓶は自動で追う)</span>':'')+
       (lvl.pull?'<br><b>固定パターン</b>(同じ動きを繰り返す)':'');
     el.intro.classList.add('on');
     setPhase('intro');                       // 新レベルは0.8秒の導入 §11.1
