@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.37</div>
+    <div id="ver">v3.37　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -1320,7 +1320,7 @@ const VoiceClips = {
   load(){
     if(this.map||this.loading) return; this.loading=true;
     fetch('voice/manifest.json',{cache:'force-cache'}).then(r=>r.ok?r.json():null)
-      .then(j=>{ this.map=j||{}; if(j&&j.credits&&j.credits.length){ document.getElementById('ver').textContent+='　声: VOICEVOX '+j.credits.join('・'); } })
+      .then(j=>{ this.map=j||{}; if(j&&j.credits&&j.credits.length){ document.getElementById('ver').append('　声: VOICEVOX '+j.credits.join('・')); } })
       .catch(()=>{ this.map={}; });
   },
   get(chId,text){ const m=this.map&&this.map[chId]; return m ? m[text] : null; },
