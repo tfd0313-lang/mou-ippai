@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.38　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
+    <div id="ver">v3.39　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -1313,9 +1313,8 @@ const Snd = {
 const vibe=p=>{ try{ if(navigator.vibrate) navigator.vibrate(p);}catch(e){} };
 
 /* ---------- 音声(端末TTS。日本語voiceを品質順に選択) ---------- */
-/* VOICEVOX の規約が求めるクレジット表記「VOICEVOX:キャラ名」。
-   もち子さんは提供元の規約で「VOICEVOX:もち子(cv 明日葉よもぎ)」の形を求めている */
-function voiceCredit(name){ return 'VOICEVOX:'+({'もち子さん':'もち子(cv 明日葉よもぎ)'}[name]||name); }
+/* VOICEVOX の規約が求めるクレジット表記「VOICEVOX:キャラ名」 */
+function voiceCredit(name){ return 'VOICEVOX:'+name; }
 /* 収録済みの声。tools/make_voice.py が VOICEVOX で作った voice/<キャラ>/<n>.m4a と
    voice/manifest.json を読む。無ければ端末の読み上げ(下のVoice)に落ちる */
 const VoiceClips = {
