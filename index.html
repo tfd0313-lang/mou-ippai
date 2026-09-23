@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.37　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
+    <div id="ver">v3.38　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -1313,6 +1313,9 @@ const Snd = {
 const vibe=p=>{ try{ if(navigator.vibrate) navigator.vibrate(p);}catch(e){} };
 
 /* ---------- 音声(端末TTS。日本語voiceを品質順に選択) ---------- */
+/* VOICEVOX の規約が求めるクレジット表記「VOICEVOX:キャラ名」。
+   もち子さんは提供元の規約で「VOICEVOX:もち子(cv 明日葉よもぎ)」の形を求めている */
+function voiceCredit(name){ return 'VOICEVOX:'+({'もち子さん':'もち子(cv 明日葉よもぎ)'}[name]||name); }
 /* 収録済みの声。tools/make_voice.py が VOICEVOX で作った voice/<キャラ>/<n>.m4a と
    voice/manifest.json を読む。無ければ端末の読み上げ(下のVoice)に落ちる */
 const VoiceClips = {
@@ -1320,7 +1323,7 @@ const VoiceClips = {
   load(){
     if(this.map||this.loading) return; this.loading=true;
     fetch('voice/manifest.json',{cache:'force-cache'}).then(r=>r.ok?r.json():null)
-      .then(j=>{ this.map=j||{}; if(j&&j.credits&&j.credits.length){ document.getElementById('ver').append('　声: VOICEVOX '+j.credits.join('・')); } })
+      .then(j=>{ this.map=j||{}; if(j&&j.credits&&j.credits.length){ document.getElementById('ver').append('　声: '+j.credits.map(voiceCredit).join(' / ')); } })
       .catch(()=>{ this.map={}; });
   },
   get(chId,text){ const m=this.map&&this.map[chId]; return m ? m[text] : null; },
@@ -2042,10 +2045,12 @@ function updateHud(){
   el.hud.innerHTML=(G.lvl.ex?'<b>EX</b> ':'')+`LEVEL <b>${G.lvl.lv}</b>　${c.name} <span style="color:#E8A13C">${'★'.repeat(c.stars)}</span>`+(G.lvl.ex?'　無理杯':'');
 }
 let lvBtns=null;      // レベル番号ボタンの実体。作り直さず使い回す
-/* 選べる最大レベル。通常編を抜けたらEXは「最高クリア+1」まで */
+/* 選べる最大レベル。通常編は「クリアした次」まで、通常編を抜けたらEXは「最高クリア+1」まで。
+   以前は検証用に通常編18面を最初から全部開けていたが、配信版ではいきなり LEVEL 18 から
+   遊べてしまい、進む楽しさが無くなる */
 function maxSelectable(){
   const d=Save.data;
-  if(d.highestCleared<18) return 18;
+  if(d.highestCleared<18) return Math.min(d.highestCleared+1,18);
   return Math.max(EX_START, (d.ex&&d.ex.best||0)+1);
 }
 function updateHome(){
@@ -2061,7 +2066,7 @@ function updateHome(){
   if(lvBtns){ refreshLevels(); return; }
   lvBtns={};
   el.levels.innerHTML='';
-  // 検証用ビルドは全レベル解放(SPEC 25)。人物ごとに行を分けて誰の面か分かるようにする
+  // 人物ごとに行を分けて誰の面か分かるようにする(解放範囲は maxSelectable)
   const groups=[];
   LEVELS.forEach(l=>{
     const last=groups[groups.length-1];
@@ -3304,17 +3309,17 @@ el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); 
 el.toHome.addEventListener('click',()=>{
   Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home'); syncBgm();
   VoiceClips.stop(); try{speechSynthesis.cancel();}catch(e){} Voice._done=true;
-  // 最初に選ばれているのは常にLEVEL 1。続きの番号を出すと、はじめて開いた人が
-  // いきなり社長(LV9)から始めることになる。続きは番号を選び直せばよい
-  G.selLevel=1;
+  // 最初に選ばれているのは「まだクリアしていない次の面」。はじめての人は LEVEL 1
+  G.selLevel=nextLevel();
   updateHome();
 });
 
 const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG) el.debug.classList.add('on');
 const mLv=location.search.match(/[?&]level=(\d+)/);
-if(mLv) G.selLevel=clamp(+mLv[1],1,99);
-else G.selLevel=1;
+function nextLevel(){ return Math.min(Save.data.highestCleared+1,18); }
+if(mLv) G.selLevel=clamp(+mLv[1],1,99);        // 解放範囲への丸めは updateLvPick で行う
+else G.selLevel=nextLevel();
 
 updateHome();
 requestAnimationFrame(()=>{ resize(); });

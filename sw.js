@@ -9,7 +9,7 @@
    clone() は caches.open の前に同期で行う。open の後だと本体が respondWith 側で
    消費済みで clone が例外になり、art/voice が一度もキャッシュされなかった(QA指摘)。
    VER を上げると古い cache を捨てる。本体の版(#ver)を上げたら一緒に上げること */
-const VER = 'mou-ippai-v3.37';
+const VER = 'mou-ippai-v3.38';
 const CORE = ['./', './index.html', './manifest.webmanifest',
               './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
