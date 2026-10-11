@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.43　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
+    <div id="ver">v3.44　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -1706,9 +1706,10 @@ const Input = {
     if(t.listening) return;
     window.addEventListener('deviceorientation',e=>{
       if(e.beta==null) return;
-      // ホーム画面や結果画面では値を捨てる(発熱・電池対策 §20)。購読自体は
-      // 外さない: 外すと再開時に初回イベントを待つ間「センサーなし」と誤判定する
-      if(!el.game.classList.contains('on')) return;
+      // ホーム画面でも値は受け取る。v3.30 でゲーム画面の外では値を捨てていたが、
+      // 「センサーが生きているか」の判定(everGot・lastEvt)はホーム画面で行うため、
+      // 生きているセンサーを「無い」と判定して傾けがドラッグ操作に落ちていた
+      // (オーナー報告: 傾きの反応が悪い)。購読は続けていたので、捨てても電池は減らない
       t.lastEvt=performance.now();
       const b=e.beta==null?t.b:e.beta;
       const g=e.gamma==null?(t.g||0):e.gamma;
