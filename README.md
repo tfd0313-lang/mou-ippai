@@ -1,9 +1,14 @@
 # もう一杯！
 
-ビールを注いで、こぼす直前で止めるシュールなカジュアルゲーム。
+ビールを注いで、あふれる直前で止めるギリギリゲーム。
 
-- 遊ぶ: https://tfd0313-lang.github.io/mou-ippai/
+- 遊ぶ(Web 版・広告なし): https://tfd0313-lang.github.io/mou-ippai/
 - スマホを傾けて注ぐ操作に対応（端末のモーションセンサーを使用）
 
-開発用のソース・仕様書・素材は別リポジトリで管理しています。
-このリポジトリは配信用のビルド済み1ファイルのみを置いています。
+## このリポジトリ
+
+- ルート: 配信用の Web 版(GitHub Pages)。ゲーム本体は index.html 1 ファイル、素材は art/・voice/
+- `android/`: Google Play 用の Android アプリ。Web 版を開き、AdMob の全画面広告を出す
+- `.github/workflows/android.yml`: Play に出す AAB を自動で作る(実行結果の Artifacts からダウンロード)
+
+開発用のソース・仕様書・手順書(RELEASE.md)は別リポジトリで管理しています。
