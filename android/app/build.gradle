@@ -1,0 +1,71 @@
+// 『もう一杯！』の Android アプリの殻。ゲーム本体は Web(GitHub Pages)にあり、ここでは
+// WebView で開いて、AdMob の全画面広告を出す窓口(MouIppaiApp)だけを足す。
+// 値は gradle のプロパティ(-P)か環境変数で渡す。何も渡さなければ Google のテスト用広告で動く。
+plugins { id 'com.android.application' }
+
+def prop = { String k, String dflt ->
+    def v = project.findProperty(k) ?: System.getenv(k)
+    return (v == null || v.toString().trim().isEmpty()) ? dflt : v.toString().trim()
+}
+// Google が公開しているテスト用 ID。本番の ID が無いときはこれで動かす(収益は出ない)
+def TEST_APP_ID  = 'ca-app-pub-3940256099942544~3347511713'
+def TEST_INTER_ID = 'ca-app-pub-3940256099942544/1033173712'
+
+def appId      = prop('APP_ID', 'io.github.tfd0313lang.mouippai')
+def startUrl   = prop('START_URL', 'https://tfd0313-lang.github.io/mou-ippai/')
+def admobApp   = prop('ADMOB_APP_ID', TEST_APP_ID)
+def admobInter = prop('ADMOB_INTERSTITIAL_ID', TEST_INTER_ID)
+def vCode      = prop('VERSION_CODE', '1').toInteger()
+def vName      = prop('VERSION_NAME', '1.0.' + vCode)
+def ksFile     = prop('KEYSTORE_FILE', '')
+
+android {
+    namespace 'app.mouippai'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId appId
+        minSdk 23
+        targetSdk 36
+        versionCode vCode
+        versionName vName
+        buildConfigField 'String', 'START_URL', "\"${startUrl}\""
+        manifestPlaceholders = [admobAppId: admobApp]
+    }
+
+    signingConfigs {
+        if (ksFile) {
+            release {
+                storeFile file(ksFile)
+                storePassword prop('KEYSTORE_PASSWORD', '')
+                keyAlias prop('KEY_ALIAS', 'upload')
+                keyPassword prop('KEY_PASSWORD', prop('KEYSTORE_PASSWORD', ''))
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            // 手元確認用は必ずテスト広告(本番広告を自分で見ると AdMob の規約違反になる)
+            buildConfigField 'String', 'AD_UNIT_INTERSTITIAL', "\"${TEST_INTER_ID}\""
+            manifestPlaceholders = [admobAppId: TEST_APP_ID]
+            applicationIdSuffix '.debug'
+        }
+        release {
+            minifyEnabled false
+            buildConfigField 'String', 'AD_UNIT_INTERSTITIAL', "\"${admobInter}\""
+            if (ksFile) signingConfig signingConfigs.release
+        }
+    }
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-ads:24.4.0'
+    implementation 'com.google.android.ump:user-messaging-platform:3.2.0'
+    implementation 'androidx.core:core:1.16.0'
+}

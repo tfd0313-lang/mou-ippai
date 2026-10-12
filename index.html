@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.45　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
+    <div id="ver">v3.46　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -2508,6 +2508,7 @@ function showResult(){
   }
   el.result.classList.add('on');
   setPhase('result');
+  Ads.onResult(R.ok);
 }
 
 /* ---------- 描画 ---------- */
@@ -3339,17 +3340,54 @@ el.startBtn.addEventListener('click',()=>{
     : 'スマホの上端を前へ倒して注ぐ';
   startLevel(G.selLevel,false);
 });
-el.nextBtn.addEventListener('click',()=>{ Snd.ui(); G.selLevel=Math.min(G.lvl.lv+1,maxSelectable());
+/* ---------- 広告(Android アプリ版だけ。仕様 §17) ----------
+   Web 版には広告を出さない。アプリの殻が window.MouIppaiApp を差し込んだときだけ動く。
+   出すのは「成功して つぎへ／ホームへ 進むとき」だけで、次の条件を全部満たすとき:
+   - 起動から90秒以上、このプレイで4回目以降の結果
+   - 前の広告から5回以上遊んだ・5分以上たった(10分に2回まで)
+   失敗直後・もう一杯(やり直し)・PERFECT の前・注いでいる間には出さない */
+const Ads={
+  app: !!(window.MouIppaiApp && window.MouIppaiApp.showAd),
+  rounds:0, since:0, lastAt:-1e9, boot:performance.now(), busy:false, _cb:null,
+  onResult(ok){ this.rounds++; this.since++; this.lastOk=!!ok; },
+  due(){
+    const now=performance.now();
+    return this.app && !this.busy && this.lastOk && this.rounds>=4 && this.since>=5
+      && now-this.boot>=90e3 && now-this.lastAt>=300e3;
+  },
+  // 出せたら閉じてから go()、出さない・出せないときはすぐ go()
+  gate(go){
+    let ready=false;
+    try{ ready=this.due() && window.MouIppaiApp.adReady(); }catch(e){}
+    if(!ready){ go(); return; }
+    this.busy=true; this._cb=go;
+    try{ Snd.ctx&&Snd.ctx.suspend(); }catch(e){}
+    try{ window.MouIppaiApp.showAd(); }catch(e){ this.done(false); }
+    // 殻から返事が来ないときの保険(広告は利用者が閉じるまで出ているので長めに待つ)
+    this._t=setTimeout(()=>this.done(false),120e3);
+  },
+  done(shown){
+    if(!this.busy) return;
+    this.busy=false; clearTimeout(this._t);
+    if(shown){ this.since=0; this.lastAt=performance.now(); }
+    try{ Snd.ctx&&Snd.ctx.resume(); }catch(e){}
+    const cb=this._cb; this._cb=null; if(cb) cb();
+  },
+};
+window.__adDone=(shown)=>Ads.done(!!shown);   // 殻が広告を閉じたら呼ぶ
+
+el.nextBtn.addEventListener('click',()=>{ Snd.ui(); Ads.gate(()=>{ G.selLevel=Math.min(G.lvl.lv+1,maxSelectable());
   if(levelOf(G.lvl.lv+1).ex && !Input.tilt.listening) Input.requestTilt();
-  startLevel(G.lvl.lv+1,false); });
+  startLevel(G.lvl.lv+1,false); }); });
 el.retryBtn.addEventListener('click',()=>{ Snd.ui(); startLevel(G.lvl.lv,true); });
-el.toHome.addEventListener('click',()=>{
-  Snd.ui(); el.result.classList.remove('on'); show('home'); setPhase('home'); syncBgm();
+el.toHome.addEventListener('click',()=>{ Snd.ui(); Ads.gate(goHome); });
+function goHome(){
+  el.result.classList.remove('on'); show('home'); setPhase('home'); syncBgm();
   VoiceClips.stop(); try{speechSynthesis.cancel();}catch(e){} Voice._done=true;
   // 最初に選ばれているのは「まだクリアしていない次の面」。はじめての人は LEVEL 1
   G.selLevel=nextLevel();
   updateHome();
-});
+}
 
 const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG) el.debug.classList.add('on');
@@ -3361,7 +3399,7 @@ else G.selLevel=nextLevel();
 updateHome();
 requestAnimationFrame(()=>{ resize(); });
 new ResizeObserver(resize).observe(el.cv);
-window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,dripAhead,STOP_AIM,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
+window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,dripAhead,STOP_AIM,Ads,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
 /* オフライン起動(仕様 §20)。Play ストア(TWA)配信の前提でもある。
    file:// や対応外のブラウザでは黙って何もしない */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
