@@ -424,7 +424,7 @@ button{touch-action:manipulation}
     <div id="levels" role="group" aria-label="レベル一覧" hidden></div>
     <button id="startBtn">はじめる</button>
     <div id="homeBest"></div>
-    <div id="ver">v3.44　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
+    <div id="ver">v3.45　<a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">プライバシーポリシー</a></div>
   </div>
 
   <!-- ゲーム -->
@@ -1591,6 +1591,21 @@ function simStep(s,dt,env){
   if(!s.cue95 && s.prevF<0.95 && F>=0.95){ s.cue95=true; Snd.tick(); vibe(15); }
   s.prevF=F;
 }
+/* 離したあと垂れて増える量(満杯に対する割合)の見込み。simStep の「止めの遅れ」と同じ式を
+   副作用なしで先読みする。止めどきの印(緑)に使う。LV1〜3は垂れが無いので0 */
+const STOP_AIM=0.993;   // 垂れ終わりで狙う高さ。満点圏(98.5%〜縁)の中ほど
+function dripAhead(s,lvl){
+  const lag=stopLag(lvl); if(lag<=0||s.Q<=0) return 0;
+  const Qmax=s.C/(lvl.fillSec*CFG.FILL_FACTOR), intake=G.curIntake??1, dt=1/240;
+  let Q=s.Q, add=0;
+  while(Q>0){
+    Q=Math.max(0,Q-(Qmax/lag)*dt);
+    const nf=clamp(Q/Qmax,0,1);
+    const fr=clamp(lerp(CFG.FOAM_LO,CFG.FOAM_HI,Math.pow(nf,CFG.FOAM_EXP))*lvl.foamMult,0,0.6);
+    add+=Q*dt*intake*(1+fr*(CFG.FOAM_EXPANSION-1));
+  }
+  return add/s.C;
+}
 function effFillRate(s){
   if(s.fHist.length<2) return 0;
   return (s.fHist[s.fHist.length-1]-s.fHist[0])/((s.fHist.length-1)*CFG.TICK);
@@ -1970,7 +1985,7 @@ function startLevel(n, retry){
   G.lvl=lvl; G.sim=newSim(GLASSES[lvl.glass].cap);
   G.res=null; G.judged=false; G.retry=!!retry; G.resultShown=false;
   G.hz=newHazardState(lvl); G.hzQueue=newHazardQueue(lvl); G.glassOff={x:0,y:0,rot:0};
-  G.fake=newFakeState(lvl); G.pull=newPullState(lvl); G._exLine=null;
+  G.fake=newFakeState(lvl); G.pull=newPullState(lvl); G._exLine=null; G.drip=0;
   Input.enabled=false; Input.resetRound();
   el.result.classList.remove('on'); el.telemark.classList.remove('on');
   el.waitBar.classList.remove('on');
@@ -2016,7 +2031,7 @@ function startLevel(n, retry){
       (lvl.lv===EX_START?'<b>ここから無理杯です</b><br>':'')+
       (lvl.ch==='musuko'?'息子は20歳(飲酒は20歳になってから)<br>':'')+
       `合格 <b>${Math.round(bandOf(lvl).min*100)}%〜</b>　満杯まで <b>${lvl.fillSec}秒</b>${lvl.glassNote?'('+lvl.glassNote+')':''}　猶予 <b>${graceOf(lvl).toFixed(1)}秒</b><br>`+
-      `止まるまで <b>${stopLag(lvl)>0?stopLag(lvl).toFixed(2).replace(/0$/,'')+'秒':'すぐ'}</b>　`+
+      (stopLag(lvl)>0?`止まるまで <b>${stopLag(lvl).toFixed(2).replace(/0$/,'')}秒</b>(<b style="color:#8fe3a8">緑の印</b>で離すと縁ぴったり)　`:'止まるまで <b>すぐ</b>　')+
       `泡 <b>${io_.label==='指定なし'?'自由':Math.round(io_.ideal[0]*100)+'〜'+Math.round(io_.ideal[1]*100)+'%'}</b>　`+
       (hzNames?`邪魔 <b>${hzNames}</b>`:'邪魔 <b>なし</b>')+
       (lvl.fake?'　<b>偽予兆あり</b>':'')+(lvl.pulse?'　<b>流量が揺れる</b>':'')+
@@ -2345,6 +2360,8 @@ function update(dt){
       const hzBusy = (G.hz && (G.hz.state==='tel'||G.hz.state==='hazard'))
                   || (G.pull && G.pull.state==='on');
       simStep(s,dt,{Qmax:Qrun,foamMult:lvl.foamMult,intake:G.curIntake??1,lag:stopLag(lvl),hold:hzBusy});
+      // 止めどきの印の高さ。流量で変わるので、ちらつかないよう少しならす。離している間は動かさない
+      if(s.target>0){ const d=dripAhead(s,lvl); G.drip=(G.drip||0)+(d-(G.drip||0))*Math.min(1,dt*10); }
       const nf=clamp(s.Q/Qmax,0,1), fill=clamp((s.L+s.P)/s.C,0,1);
       const foamR=s.P/Math.max(s.L+s.P,1e-9);
       Snd.pour(nf,fill,foamR,dt);
@@ -2872,6 +2889,26 @@ function renderScene(now){
     ctx.moveTo(wm.L-6,yM); ctx.lineTo(wm.L+1,yM);
     ctx.moveTo(wm.R-1,yM); ctx.lineTo(wm.R+6,yM);
     ctx.stroke();
+    // 止めどきの印(LV4〜)。離したあと垂れる分だけ縁より下に出す。ここで離すと
+    // 垂れ終わりが縁ぴったり(満点圏)になる。縁の線で離すとあふれる、の食い違いをなくす
+    const drip=G.drip||0;
+    if(G.phase==='play' && s.target>0 && drip>0.004){
+      const yS=botY-innerH*(STOP_AIM-drip);
+      const ws=hwAt(yS), rxs=Math.max((ws.R-ws.L)/2,0.1), rys=Math.max(ryAt(yS),0.1);
+      const on=F>=STOP_AIM-drip-0.004;
+      ctx.lineWidth=3; ctx.strokeStyle='rgba(18,11,5,0.35)';
+      ctx.beginPath(); ctx.ellipse(ws.C,yS,rxs,rys,0,Math.PI,Math.PI*2); ctx.stroke();
+      ctx.lineWidth=1.5; ctx.strokeStyle=on?'rgba(190,255,205,1)':'rgba(143,227,168,0.85)';
+      ctx.beginPath(); ctx.ellipse(ws.C,yS,rxs,rys,0,Math.PI,Math.PI*2); ctx.stroke();
+      ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath();
+      ctx.moveTo(ws.L-11,yS); ctx.lineTo(ws.L-1,yS);
+      ctx.moveTo(ws.R+1,yS); ctx.lineTo(ws.R+11,yS);
+      ctx.stroke();
+      ctx.font='bold 10px "Hiragino Sans","Noto Sans JP",sans-serif'; ctx.textBaseline='middle';
+      ctx.lineWidth=3; ctx.strokeStyle='rgba(18,11,5,0.8)'; ctx.strokeText('離す',ws.R+14,yS);
+      ctx.fillStyle=ctx.strokeStyle=on?'rgba(190,255,205,1)':'rgba(143,227,168,0.95)'; ctx.fillText('離す',ws.R+14,yS);
+    }
     ctx.restore();
   }
   // 縁の線。あふれる境目なので、常にうっすら出しておく
@@ -3324,7 +3361,7 @@ else G.selLevel=nextLevel();
 updateHome();
 requestAnimationFrame(()=>{ resize(); });
 new ResizeObserver(resize).observe(el.cv);
-window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
+window.MI={G,Input,CFG,Save,judge,score,LEVELS,startLevel,dripAhead,STOP_AIM,FOAM_ORDERS,CHAR_ART,buildChara,CHARS,levelOf,exLevel,graceOf,bandOf,stopLag,Snd,Voice,VoiceClips};
 /* オフライン起動(仕様 §20)。Play ストア(TWA)配信の前提でもある。
    file:// や対応外のブラウザでは黙って何もしない */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
